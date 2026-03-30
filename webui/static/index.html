@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SurgBenchKit — GT Viewer</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: 'Inter', system-ui, sans-serif; }
+    .task-tab { transition: all 0.15s; }
+    .task-tab.active { background: #2563eb; color: white; }
+    .task-tab:not(.active):hover { background: #eff6ff; color: #1d4ed8; }
+    .dataset-tag { transition: all 0.15s; cursor: pointer; }
+    .dataset-tag.active { background: #2563eb; color: white; border-color: #2563eb; }
+    .dataset-tag:not(.active):hover { background: #eff6ff; border-color: #93c5fd; }
+    .frame-card { transition: transform 0.1s; }
+    .frame-card:hover { transform: scale(1.02); }
+    .label-pill { font-size: 0.7rem; line-height: 1.2; }
+    #loading-spinner { display: none; }
+    #loading-spinner.show { display: flex; }
+    .skeleton { background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+                background-size: 200% 100%; animation: shimmer 1.5s infinite; }
+    @keyframes shimmer { 0% {background-position: 200% 0} 100% {background-position: -200% 0} }
+  </style>
+</head>
+<body class="bg-gray-50 h-screen flex flex-col">
+
+  <!-- Header -->
+  <header class="bg-white border-b border-gray-200 px-6 py-3 flex items-center gap-3 shrink-0">
+    <span class="text-xl">🔬</span>
+    <h1 class="text-lg font-semibold text-gray-800">SurgBenchKit — GT Viewer</h1>
+    <span class="text-gray-400 text-sm ml-2">Ground truth visualization</span>
+  </header>
+
+  <div class="flex flex-1 overflow-hidden">
+
+    <!-- Sidebar: Task Tabs -->
+    <aside class="w-52 bg-white border-r border-gray-200 overflow-y-auto shrink-0 py-3">
+      <p class="px-4 text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Tasks</p>
+      <div id="task-list" class="flex flex-col gap-0.5 px-2">
+        <div class="skeleton h-8 rounded mb-1"></div>
+        <div class="skeleton h-8 rounded mb-1"></div>
+        <div class="skeleton h-8 rounded mb-1"></div>
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <main class="flex-1 overflow-y-auto p-6">
+
+      <!-- Dataset tags -->
+      <div id="dataset-section" class="mb-5 hidden">
+        <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Datasets</p>
+        <div id="dataset-tags" class="flex flex-wrap gap-2"></div>
+      </div>
+
+      <!-- Prompt panel -->
+      <div id="prompt-section" class="mb-5 hidden">
+        <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Prompt</p>
+        <div class="bg-white border border-gray-200 rounded-xl overflow-hidden">
+          <!-- Model tabs -->
+          <div id="prompt-model-tabs" class="flex flex-wrap gap-0 border-b border-gray-100 px-3 pt-2"></div>
+          <!-- Prompt text -->
+          <pre id="prompt-text"
+            class="text-sm text-gray-700 p-4 whitespace-pre-wrap font-mono leading-relaxed bg-gray-50 min-h-[3rem]"></pre>
+        </div>
+      </div>
+
+      <!-- Video selector row -->
+      <div id="video-section" class="mb-5 hidden flex items-center gap-4">
+        <label class="text-sm text-gray-600 font-medium">Video</label>
+        <select id="video-select"
+          class="border border-gray-300 rounded-md px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400">
+        </select>
+        <label class="text-sm text-gray-600 font-medium ml-4">Samples</label>
+        <input id="n-input" type="number" value="12" min="4" max="48" step="4"
+          class="border border-gray-300 rounded-md px-3 py-1.5 text-sm w-20 focus:outline-none focus:ring-2 focus:ring-blue-400" />
+        <button id="refresh-btn"
+          class="ml-2 px-4 py-1.5 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700 transition">
+          Load
+        </button>
+      </div>
+
+      <!-- Loading -->
+      <div id="loading-spinner" class="items-center gap-3 text-gray-500 py-10">
+        <svg class="animate-spin h-5 w-5" viewBox="0 0 24 24" fill="none">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+        </svg>
+        <span class="text-sm">Loading samples…</span>
+      </div>
+
+      <!-- Empty state -->
+      <div id="empty-state" class="flex flex-col items-center justify-center py-20 text-gray-400">
+        <span class="text-5xl mb-4">🎬</span>
+        <p class="text-base">Select a task and dataset to browse samples</p>
+      </div>
+
+      <!-- Frame grid -->
+      <div id="frame-grid" class="grid gap-4"
+           style="grid-template-columns: repeat(auto-fill, minmax(220px, 1fr))">
+      </div>
+
+    </main>
+  </div>
+
+<script>
+  let selectedTask = null;
+  let selectedDataset = null;
+  let taskMap = {};
+
+  // ── Boot ────────────────────────────────────────────────────────────────
+  async function init() {
+    const resp = await fetch('/api/tasks');
+    taskMap = await resp.json();
+    renderTaskList();
+  }
+
+  // ── Sidebar ─────────────────────────────────────────────────────────────
+  function renderTaskList() {
+    const container = document.getElementById('task-list');
+    container.innerHTML = '';
+    for (const taskType of Object.keys(taskMap)) {
+      const btn = document.createElement('button');
+      btn.className = 'task-tab text-left px-3 py-2 rounded-md text-sm text-gray-700 font-medium';
+      btn.textContent = formatTaskName(taskType);
+      btn.dataset.task = taskType;
+      btn.addEventListener('click', () => selectTask(taskType));
+      container.appendChild(btn);
+    }
+  }
+
+  function formatTaskName(t) {
+    return t.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  }
+
+  // ── Task selection ───────────────────────────────────────────────────────
+  async function selectTask(taskType) {
+    selectedTask = taskType;
+    selectedDataset = null;
+
+    // Update sidebar active
+    document.querySelectorAll('.task-tab').forEach(b => {
+      b.classList.toggle('active', b.dataset.task === taskType);
+    });
+
+    // Render dataset tags
+    const datasets = taskMap[taskType] || [];
+    const sec = document.getElementById('dataset-section');
+    const tagsDiv = document.getElementById('dataset-tags');
+    tagsDiv.innerHTML = '';
+    sec.classList.remove('hidden');
+
+    for (const ds of datasets) {
+      const tag = document.createElement('button');
+      tag.className = 'dataset-tag border border-gray-300 rounded-full px-4 py-1 text-sm text-gray-700 font-medium';
+      tag.textContent = formatDatasetName(ds);
+      tag.dataset.dataset = ds;
+      tag.addEventListener('click', () => selectDataset(taskType, ds));
+      tagsDiv.appendChild(tag);
+    }
+
+    // Clear grid & hide video/prompt sections
+    document.getElementById('frame-grid').innerHTML = '';
+    document.getElementById('video-section').classList.add('hidden');
+    document.getElementById('prompt-section').classList.add('hidden');
+    document.getElementById('empty-state').classList.remove('hidden');
+
+    // Auto-select first dataset that has data
+    if (datasets.length > 0) selectDataset(taskType, datasets[0]);
+  }
+
+  function formatDatasetName(ds) {
+    const MAP = {
+      heichole: 'HeiChole', cholec80: 'Cholec80', avos: 'AVOS',
+      jigsaws: 'JIGSAWS', cholect45: 'CholecT45', endoscapes: 'Endoscapes',
+      multibypass140: 'MultiBypass140', autolaparo: 'AutoLaparo', dresden: 'Dresden',
+    };
+    return MAP[ds] || ds.replace(/\b\w/g, c => c.toUpperCase());
+  }
+
+  // ── Prompt panel ─────────────────────────────────────────────────────────
+  let promptData = {};
+
+  async function loadPrompt(taskKey) {
+    const sec = document.getElementById('prompt-section');
+    const tabsDiv = document.getElementById('prompt-model-tabs');
+    const textEl = document.getElementById('prompt-text');
+
+    const resp = await fetch(`/api/prompt?task=${taskKey}`);
+    promptData = await resp.json();
+
+    const models = Object.keys(promptData);
+    if (models.length === 0) {
+      sec.classList.add('hidden');
+      return;
+    }
+    sec.classList.remove('hidden');
+    tabsDiv.innerHTML = '';
+
+    models.forEach((model, i) => {
+      const btn = document.createElement('button');
+      btn.className = 'prompt-model-tab px-3 py-1.5 text-xs font-medium rounded-t border-b-2 mr-1 transition ' +
+        (i === 0 ? 'border-blue-500 text-blue-600 bg-white' : 'border-transparent text-gray-500 hover:text-gray-700 bg-transparent');
+      btn.textContent = model;
+      btn.dataset.model = model;
+      btn.addEventListener('click', () => showPromptFor(model));
+      tabsDiv.appendChild(btn);
+    });
+
+    showPromptFor(models[0]);
+  }
+
+  function showPromptFor(model) {
+    document.querySelectorAll('.prompt-model-tab').forEach(b => {
+      const active = b.dataset.model === model;
+      b.className = 'prompt-model-tab px-3 py-1.5 text-xs font-medium rounded-t border-b-2 mr-1 transition ' +
+        (active ? 'border-blue-500 text-blue-600 bg-white' : 'border-transparent text-gray-500 hover:text-gray-700 bg-transparent');
+    });
+    document.getElementById('prompt-text').textContent = promptData[model] ?? '';
+  }
+
+  // ── Dataset selection ────────────────────────────────────────────────────
+  async function selectDataset(taskType, dataset) {
+    selectedDataset = dataset;
+
+    document.querySelectorAll('.dataset-tag').forEach(b => {
+      b.classList.toggle('active', b.dataset.dataset === dataset);
+    });
+
+    // Build the full task key for the API
+    const taskKey = `${dataset}_${taskType}`;
+
+    // Load prompt for this task+dataset combination
+    loadPrompt(taskKey);
+
+    // Fetch available videos
+    const vresp = await fetch(`/api/videos?task=${taskKey}`);
+    const videos = await vresp.json();
+
+    const videoSec = document.getElementById('video-section');
+    const videoSelect = document.getElementById('video-select');
+    videoSelect.innerHTML = '';
+
+    if (videos.length > 0) {
+      videoSec.classList.remove('hidden');
+      for (const v of videos) {
+        const opt = document.createElement('option');
+        opt.value = v;
+        opt.textContent = v;
+        videoSelect.appendChild(opt);
+      }
+      loadSamples(taskKey, videos[0]);
+    } else {
+      videoSec.classList.add('hidden');
+      showUnsupported(dataset, taskType);
+    }
+  }
+
+  // ── Load samples ─────────────────────────────────────────────────────────
+  async function loadSamples(taskKey, video) {
+    const n = parseInt(document.getElementById('n-input').value) || 12;
+    const grid = document.getElementById('frame-grid');
+    const empty = document.getElementById('empty-state');
+    const spinner = document.getElementById('loading-spinner');
+
+    grid.innerHTML = '';
+    empty.classList.add('hidden');
+    spinner.classList.add('show');
+
+    try {
+      const resp = await fetch(`/api/samples?task=${taskKey}&video=${video}&n=${n}`);
+      if (!resp.ok) {
+        const err = await resp.json();
+        showError(err.detail || 'Failed to load samples');
+        return;
+      }
+      const samples = await resp.json();
+      spinner.classList.remove('show');
+      renderFrameGrid(samples);
+    } catch (e) {
+      spinner.classList.remove('show');
+      showError(e.message);
+    }
+  }
+
+  // ── Render grid ───────────────────────────────────────────────────────────
+  function renderFrameGrid(samples) {
+    const grid = document.getElementById('frame-grid');
+    grid.innerHTML = '';
+    document.getElementById('empty-state').classList.add('hidden');
+
+    for (const s of samples) {
+      const card = document.createElement('div');
+      card.className = 'frame-card bg-white rounded-xl overflow-hidden shadow-sm border border-gray-100';
+
+      const img = document.createElement('img');
+      img.src = s.image_url;
+      img.className = 'w-full aspect-video object-cover bg-gray-100';
+      img.loading = 'lazy';
+
+      const info = document.createElement('div');
+      info.className = 'p-2';
+
+      const meta = document.createElement('p');
+      meta.className = 'text-xs text-gray-400 mb-1';
+      meta.textContent = `${s.video}  ·  frame ${s.frame_idx}`;
+      info.appendChild(meta);
+
+      const labelDiv = renderLabel(s.label);
+      info.appendChild(labelDiv);
+
+      card.appendChild(img);
+      card.appendChild(info);
+      grid.appendChild(card);
+    }
+  }
+
+  function renderLabel(label) {
+    const div = document.createElement('div');
+    div.className = 'flex flex-wrap gap-1 min-h-[1.5rem]';
+
+    if (!label || Object.keys(label).length === 0) {
+      const pill = document.createElement('span');
+      pill.className = 'label-pill bg-gray-100 text-gray-400 rounded px-2 py-0.5';
+      pill.textContent = 'no annotation';
+      div.appendChild(pill);
+      return div;
+    }
+
+    if (label.type === 'single') {
+      const pill = document.createElement('span');
+      pill.className = 'label-pill bg-blue-100 text-blue-700 rounded-full px-2 py-0.5 font-medium';
+      pill.textContent = label.label;
+      div.appendChild(pill);
+    } else if (label.type === 'multi') {
+      if (label.labels.length === 0) {
+        const pill = document.createElement('span');
+        pill.className = 'label-pill bg-gray-100 text-gray-400 rounded px-2 py-0.5';
+        pill.textContent = 'none active';
+        div.appendChild(pill);
+      } else {
+        for (const l of label.labels) {
+          const pill = document.createElement('span');
+          pill.className = 'label-pill bg-green-100 text-green-700 rounded-full px-2 py-0.5 font-medium';
+          pill.textContent = l;
+          div.appendChild(pill);
+        }
+      }
+    }
+    return div;
+  }
+
+  function showUnsupported(dataset, task) {
+    const grid = document.getElementById('frame-grid');
+    grid.innerHTML = `
+      <div class="col-span-full flex flex-col items-center py-20 text-gray-400">
+        <span class="text-4xl mb-3">🚧</span>
+        <p class="text-sm">${formatDatasetName(dataset)} / ${formatTaskName(task)} not yet wired up</p>
+      </div>`;
+    document.getElementById('empty-state').classList.add('hidden');
+  }
+
+  function showError(msg) {
+    const grid = document.getElementById('frame-grid');
+    grid.innerHTML = `
+      <div class="col-span-full flex flex-col items-center py-20 text-red-400">
+        <span class="text-4xl mb-3">⚠️</span>
+        <p class="text-sm">${msg}</p>
+      </div>`;
+    document.getElementById('empty-state').classList.add('hidden');
+    document.getElementById('loading-spinner').classList.remove('show');
+  }
+
+  // ── Wire up controls ─────────────────────────────────────────────────────
+  document.getElementById('refresh-btn').addEventListener('click', () => {
+    if (!selectedTask || !selectedDataset) return;
+    const taskKey = `${selectedDataset}_${selectedTask}`;
+    const video = document.getElementById('video-select').value;
+    loadSamples(taskKey, video);
+  });
+
+  document.getElementById('video-select').addEventListener('change', e => {
+    if (!selectedTask || !selectedDataset) return;
+    const taskKey = `${selectedDataset}_${selectedTask}`;
+    loadSamples(taskKey, e.target.value);
+  });
+
+  init();
+</script>
+</body>
+</html>
