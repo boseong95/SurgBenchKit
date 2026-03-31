@@ -35,7 +35,7 @@ HEICHOLE_LABELS = {
     },
     "action": {
         "type": "multi",
-        "names": ["Grasping", "Retracting", "Dissecting", "Clipping / Cutting"],
+        "names": ["Grasp", "Hold", "Cut", "Clip"],
         "col_groups": [(1,2), (2,3), (3,4), (4,5)],
     },
 }
@@ -50,6 +50,12 @@ ANNOTATION_SUFFIX = {
     "phase":  "_Annotation_Phase.csv",
     "tool":   "_Annotation_Instrument.csv",
     "action": "_Annotation_Action.csv",
+}
+
+ANN_SUBDIR = {
+    "phase":  "Phase",
+    "tool":   "Instrument",
+    "action": "Action",
 }
 
 # ── Parse prompts.py ─────────────────────────────────────────────────────────
@@ -94,7 +100,7 @@ def heichole_frames(video: str) -> list[Path]:
 
 def load_heichole_annotation(video: str, ann_type: str) -> pd.DataFrame:
     suffix = ANNOTATION_SUFFIX[ann_type]
-    ann_path = DATASET_ROOT / "HeiChole" / "Annotations" / ann_type.capitalize() / f"{video}{suffix}"
+    ann_path = DATASET_ROOT / "HeiChole" / "Annotations" / ANN_SUBDIR[ann_type] / f"{video}{suffix}"
     if not ann_path.exists():
         return pd.DataFrame()
     return pd.read_csv(ann_path, header=None)
@@ -231,6 +237,54 @@ def get_samples(
     raise HTTPException(404, f"Dataset '{dataset}' not yet supported")
 
 
+PHASE_COLORS = [
+    "#c0392b",  # Preparation
+    "#27ae60",  # Calot Triangle Dissection
+    "#5dade2",  # Clipping & Cutting
+    "#d4ac0d",  # Gallbladder Dissection
+    "#e67e22",  # Gallbladder Packaging
+    "#8e44ad",  # Cleaning & Coagulation
+    "#b39ddb",  # Gallbladder Retraction
+]
+
+
+@app.get("/api/phase_timeline")
+def get_phase_timeline(video: str = Query(...)):
+    """Return run-length-encoded phase segments for the full video timeline."""
+    df = load_heichole_annotation(video, "phase")
+    if df.empty:
+        raise HTTPException(404, f"No phase annotation for '{video}'")
+
+    names = HEICHOLE_LABELS["phase"]["names"]
+    total = len(df)
+    segments = []
+    prev_phase = int(df.iloc[0][1])
+    run_start = 0
+
+    for i, row in df.iterrows():
+        phase = int(row[1])
+        if phase != prev_phase:
+            segments.append({
+                "label": names[prev_phase] if prev_phase < len(names) else str(prev_phase),
+                "color": PHASE_COLORS[prev_phase] if prev_phase < len(PHASE_COLORS) else "#aaa",
+                "pct": round((i - run_start) / total * 100, 3),
+                "start_frame": int(df.iloc[run_start][0]),
+                "end_frame": int(df.iloc[i - 1][0]),
+            })
+            run_start = i
+            prev_phase = phase
+
+    # Last segment
+    segments.append({
+        "label": names[prev_phase] if prev_phase < len(names) else str(prev_phase),
+        "color": PHASE_COLORS[prev_phase] if prev_phase < len(PHASE_COLORS) else "#aaa",
+        "pct": round((total - run_start) / total * 100, 3),
+        "start_frame": int(df.iloc[run_start][0]),
+        "end_frame": int(df.iloc[-1][0]),
+    })
+    return segments
+
+
 @app.get("/api/prompt")
 def get_prompt(task: str = Query(...)):
     """Return all model prompts for a given full task key (e.g. heichole_phase_recognition)."""
@@ -246,6 +300,31 @@ def serve_image(rest_of_path: str):
     if not image_path.exists():
         raise HTTPException(404, "Image not found")
     return FileResponse(str(image_path))
+
+
+@app.get("/api/action_histogram")
+def get_action_histogram(video: str = Query(...)):
+    """Return total frame counts per action label across the full annotation CSV."""
+    df = load_heichole_annotation(video, "action")
+    if df.empty:
+        raise HTTPException(404, f"No action annotation for '{video}'")
+
+    cfg = HEICHOLE_LABELS["action"]
+    total = len(df)
+    result = []
+    for name, (start, end) in zip(cfg["names"], cfg["col_groups"]):
+        cols = list(range(start, end))
+        count = int(df[cols].any(axis=1).sum())
+        result.append({"label": name, "count": count, "pct": round(count / total * 100, 2)})
+    return {"total_frames": total, "labels": result}
+
+
+@app.get("/video/{rest_of_path:path}")
+def serve_video(rest_of_path: str):
+    video_path = DATASET_ROOT / rest_of_path
+    if not video_path.exists():
+        raise HTTPException(404, "Video not found")
+    return FileResponse(str(video_path), media_type="video/mp4")
 
 
 # ── Frontend ──────────────────────────────────────────────────────────────────

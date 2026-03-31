@@ -1,9 +1,9 @@
-# Task 
+# Task
 name: heichole_tool_recognition_fewshot
 data: HeiCholeDataloader
 data_config:
   transform: None
-  data_dir: /path/to/heichole
-label_names: ['Grasper', 'Clipper', 'Coagulation instruments', 'Scissors', 'Suction-irrigation', 'Specimen bag', 'Stapler']
+  data_dir: /Users/boseong/dataset/HeiChole
+label_names: ['Grasper', 'Bipolar Forceps', 'Hook', 'Scissors', 'Clipper', 'Irrigator', 'Specimen Bag']
 clip_eval_mode: 'sigmoid'  # multi-label binary classification
 shots: one

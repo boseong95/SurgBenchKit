@@ -86,7 +86,6 @@ class HeiCholeDataloader(Dataset):
                         frame_path = os.path.join(self.image_dir, video_name, frame_name)
                         labels.append((frame_path, frame_label))
 
-        labels = labels[:10] # TODO remove this line - for debugging
         return labels
 
     def __len__(self):

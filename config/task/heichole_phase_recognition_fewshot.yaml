@@ -1,9 +1,9 @@
-# Task 
+# Task
 name: heichole_phase_recognition_fewshot
 data: HeiCholeDataloader
 data_config:
   transform: None
-  data_dir: /path/to/heichole
-label_names: ['Preparation', 'CalotTriangleDissection', 'ClippingCutting', 'GallbladderDissection', 'GallbladderPackaging', 'CleaningCoagulation', 'GallbladderRetraction']
+  data_dir: /Users/boseong/dataset/HeiChole
+label_names: ['Preparation', 'Calot Triangle Dissection', 'Clipping & Cutting', 'Gallbladder Dissection', 'Gallbladder Packaging', 'Cleaning & Coagulation', 'Gallbladder Retraction']
 clip_eval_mode: 'singlelabel'  # single label multi-class classification
 shots: one
