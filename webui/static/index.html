@@ -76,19 +76,22 @@
       </div>
 
       <!-- Video selector row -->
-      <div id="video-section" class="mb-5 hidden flex items-center gap-4">
+      <div id="video-section" class="mb-3 hidden flex items-center gap-4">
         <label class="text-sm text-gray-600 font-medium">Video</label>
         <select id="video-select"
           class="border border-gray-300 rounded-md px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400">
         </select>
-        <label class="text-sm text-gray-600 font-medium ml-4">Samples</label>
+      </div>
+      <!-- Sample count row (always visible) -->
+      <div class="mb-5 flex items-center gap-4">
+        <label class="text-sm text-gray-600 font-medium">Samples</label>
         <select id="n-input"
           class="border border-gray-300 rounded-md px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400">
           <option value="10">10</option>
           <option value="20" selected>20</option>
           <option value="50">50</option>
-          <option value="200">200</option>
-          <option value="1100">1100</option>
+          <option value="100">100</option>
+          <option value="0">All</option>
         </select>
         <button id="refresh-btn"
           class="ml-2 px-4 py-1.5 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700 transition">
@@ -131,8 +134,27 @@
         <span class="text-sm">Loading samples…</span>
       </div>
 
+      <!-- Dashboard (shown when no task selected) -->
+      <div id="dashboard" class="hidden">
+        <h2 class="text-lg font-semibold text-gray-700 mb-1">Available Datasets</h2>
+        <p class="text-sm text-gray-400 mb-4">Click a card to start browsing</p>
+
+        <!-- Dataset filter chips -->
+        <div id="dash-dataset-filters" class="flex flex-wrap gap-2 mb-6"></div>
+
+        <div id="dash-frame-section" class="hidden mb-8">
+          <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Frame-based Tasks</h3>
+          <div id="dash-frame-cards" class="grid gap-4" style="grid-template-columns: repeat(auto-fill, minmax(200px,1fr))"></div>
+        </div>
+
+        <div id="dash-video-section" class="hidden">
+          <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Video-based Tasks</h3>
+          <div id="dash-video-cards" class="grid gap-4" style="grid-template-columns: repeat(auto-fill, minmax(200px,1fr))"></div>
+        </div>
+      </div>
+
       <!-- Empty state -->
-      <div id="empty-state" class="flex flex-col items-center justify-center py-20 text-gray-400">
+      <div id="empty-state" class="hidden flex flex-col items-center justify-center py-20 text-gray-400">
         <span class="text-5xl mb-4">🎬</span>
         <p class="text-base">Select a task and dataset to browse samples</p>
       </div>
@@ -150,6 +172,8 @@
   let selectedDataset = null;
   let taskMap = {};
   let allSamples = [];
+  let knownTasks = [];
+  let dashboardData = [];
   let activeFilter = null;
 
   // ── Boot ────────────────────────────────────────────────────────────────
@@ -188,8 +212,14 @@
   }
 
   async function init() {
-    const resp = await fetch('/api/tasks');
-    taskMap = await resp.json();
+    const [tasksResp, knownResp, dashResp] = await Promise.all([
+      fetch('/api/tasks'),
+      fetch('/api/known_tasks'),
+      fetch('/api/dashboard'),
+    ]);
+    taskMap = await tasksResp.json();
+    knownTasks = await knownResp.json();
+    dashboardData = await dashResp.json();
     renderTaskList();
 
     // Restore state from URL if present
@@ -197,14 +227,111 @@
     if (state.task) {
       if (state.n) document.getElementById('n-input').value = state.n;
       await selectTask(state.task, state.dataset, state.video, state.filter);
+    } else {
+      document.querySelector('[data-task="__home__"]')?.classList.add('active');
+      showDashboard();
     }
+  }
+
+  let dashActiveDataset = null;
+
+  function showDashboard() {
+    document.getElementById('dashboard').classList.remove('hidden');
+    document.getElementById('empty-state').classList.add('hidden');
+    document.getElementById('dataset-section').classList.add('hidden');
+    document.getElementById('prompt-section').classList.add('hidden');
+    document.getElementById('video-section').classList.add('hidden');
+    document.getElementById('frame-grid').innerHTML = '';
+    document.getElementById('filter-section').classList.add('hidden');
+    document.getElementById('timeline-section').classList.add('hidden');
+    document.getElementById('video-player-section').classList.add('hidden');
+    document.getElementById('action-histogram-section').classList.add('hidden');
+
+    renderDashboardFilters();
+    renderDashboardCards();
+  }
+
+  function renderDashboardFilters() {
+    const filtersDiv = document.getElementById('dash-dataset-filters');
+    filtersDiv.innerHTML = '';
+
+    const datasets = [...new Set(dashboardData.filter(e => e.count > 0).map(e => e.dataset))].sort();
+
+    const makeChip = (label, value) => {
+      const btn = document.createElement('button');
+      const isActive = dashActiveDataset === value;
+      btn.className = `px-4 py-1.5 rounded-full text-sm font-medium border transition ${
+        isActive ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-300 hover:border-blue-400 hover:text-blue-600'
+      }`;
+      btn.textContent = label;
+      btn.addEventListener('click', () => {
+        dashActiveDataset = dashActiveDataset === value ? null : value;
+        renderDashboardFilters();
+        renderDashboardCards();
+      });
+      filtersDiv.appendChild(btn);
+    };
+
+    makeChip('All', null);
+    for (const ds of datasets) makeChip(formatDatasetName(ds), ds);
+  }
+
+  function renderDashboardCards() {
+    const frameCards = document.getElementById('dash-frame-cards');
+    const videoCards = document.getElementById('dash-video-cards');
+    frameCards.innerHTML = '';
+    videoCards.innerHTML = '';
+
+    const filtered = dashboardData.filter(e =>
+      e.count > 0 && (dashActiveDataset === null || e.dataset === dashActiveDataset)
+    );
+
+    let hasFrame = false, hasVideo = false;
+    for (const entry of filtered) {
+      const card = document.createElement('div');
+      card.className = 'bg-white border border-gray-200 rounded-xl p-4 cursor-pointer hover:border-blue-400 hover:shadow-md transition group';
+      card.innerHTML = `
+        <div class="text-xs font-semibold text-blue-500 uppercase tracking-wider mb-1">${formatDatasetName(entry.dataset)}</div>
+        <div class="text-sm font-medium text-gray-800 group-hover:text-blue-600 mb-3">${formatTaskName(entry.task_type)}</div>
+        <div class="flex items-end justify-between">
+          <span class="text-2xl font-bold text-gray-800">${entry.count.toLocaleString()}</span>
+          <span class="text-xs text-gray-400">${entry.unit}</span>
+        </div>
+        ${entry.granularity === 'frame' && entry.videos ? `<div class="text-xs text-gray-400 mt-1">${entry.videos} video${entry.videos !== 1 ? 's' : ''}</div>` : ''}
+      `;
+      card.addEventListener('click', () => selectTask(entry.task_type, entry.dataset.toLowerCase()));
+      if (entry.granularity === 'frame') { frameCards.appendChild(card); hasFrame = true; }
+      else                               { videoCards.appendChild(card); hasVideo = true; }
+    }
+    document.getElementById('dash-frame-section').classList.toggle('hidden', !hasFrame);
+    document.getElementById('dash-video-section').classList.toggle('hidden', !hasVideo);
   }
 
   // ── Sidebar ─────────────────────────────────────────────────────────────
   function renderTaskList() {
     const container = document.getElementById('task-list');
     container.innerHTML = '';
+
+    // Only show tasks that have at least one entry with count > 0 in dashboardData
+    const availableTaskTypes = new Set(dashboardData.filter(e => e.count > 0).map(e => e.task_type));
+
+    // Add a "Home" button at the top
+    const homeBtn = document.createElement('button');
+    homeBtn.className = 'task-tab text-left px-3 py-2 rounded-md text-sm text-gray-500 font-medium mb-1';
+    homeBtn.textContent = 'Home';
+    homeBtn.dataset.task = '__home__';
+    homeBtn.addEventListener('click', () => {
+      selectedTask = null;
+      selectedDataset = null;
+      document.querySelectorAll('.task-tab').forEach(b => b.classList.remove('active'));
+      homeBtn.classList.add('active');
+      history.replaceState(null, '', location.pathname);
+      showDashboard();
+    });
+    container.appendChild(homeBtn);
+
     for (const taskType of Object.keys(taskMap)) {
+      if (!availableTaskTypes.has(taskType)) continue;
       const btn = document.createElement('button');
       btn.className = 'task-tab text-left px-3 py-2 rounded-md text-sm text-gray-700 font-medium';
       btn.textContent = formatTaskName(taskType);
@@ -222,18 +349,26 @@
   async function selectTask(taskType, restoreDataset, restoreVideo, restoreFilter) {
     selectedTask = taskType;
     selectedDataset = null;
+    // Reset sample count to 20 when switching tasks (unless restoring from URL)
+    if (!restoreDataset) document.getElementById('n-input').value = '20';
 
     // Update sidebar active
     document.querySelectorAll('.task-tab').forEach(b => {
       b.classList.toggle('active', b.dataset.task === taskType);
     });
 
-    // Render dataset tags
-    const datasets = taskMap[taskType] || [];
+    // Only show datasets that have actual data for this task
+    const allDatasets = taskMap[taskType] || [];
+    const availableForTask = new Set(
+      dashboardData.filter(e => e.task_type === taskType && e.count > 0).map(e => e.dataset.toLowerCase())
+    );
+    const datasets = allDatasets.filter(ds => availableForTask.has(ds.toLowerCase()));
+
     const sec = document.getElementById('dataset-section');
     const tagsDiv = document.getElementById('dataset-tags');
     tagsDiv.innerHTML = '';
-    sec.classList.remove('hidden');
+    if (datasets.length > 0) sec.classList.remove('hidden');
+    else sec.classList.add('hidden');
 
     for (const ds of datasets) {
       const tag = document.createElement('button');
@@ -244,7 +379,8 @@
       tagsDiv.appendChild(tag);
     }
 
-    // Clear grid & hide video/prompt sections
+    // Clear grid & hide dashboard/video/prompt sections
+    document.getElementById('dashboard').classList.add('hidden');
     document.getElementById('frame-grid').innerHTML = '';
     document.getElementById('video-section').classList.add('hidden');
     document.getElementById('prompt-section').classList.add('hidden');
@@ -256,7 +392,7 @@
 
   function formatDatasetName(ds) {
     const MAP = {
-      heichole: 'HeiChole', cholec80: 'Cholec80', avos: 'AVOS',
+      heichole: 'HeiChole', cholec80: 'Cholec80', avos: 'AVOS', endoscapes: 'Endoscapes',
       jigsaws: 'JIGSAWS', cholect45: 'CholecT45', endoscapes: 'Endoscapes',
       multibypass140: 'MultiBypass140', autolaparo: 'AutoLaparo', dresden: 'Dresden',
     };
@@ -334,6 +470,11 @@
       if (restoreVideo && videos.includes(restoreVideo)) videoSelect.value = targetVideo;
       loadExtras(taskKey, targetVideo);
       loadSamples(taskKey, targetVideo, restoreFilter);
+    } else if (knownTasks.includes(taskKey)) {
+      // Task is known but needs no per-video selection (e.g. endoscapes all frames)
+      videoSec.classList.add('hidden');
+      loadExtras(taskKey, null);
+      loadSamples(taskKey, null, restoreFilter);
     } else {
       videoSec.classList.add('hidden');
       showUnsupported(dataset, taskType);
@@ -354,7 +495,7 @@
 
   // ── Load samples ─────────────────────────────────────────────────────────
   async function loadSamples(taskKey, video, restoreFilter) {
-    const n = parseInt(document.getElementById('n-input').value) || 20;
+    const n = parseInt(document.getElementById('n-input').value) ?? 20;
     const grid = document.getElementById('frame-grid');
     const empty = document.getElementById('empty-state');
     const spinner = document.getElementById('loading-spinner');
@@ -365,7 +506,8 @@
     document.getElementById('filter-section').classList.add('hidden');
 
     try {
-      const resp = await fetch(`/api/samples?task=${taskKey}&video=${video}&n=${n}`);
+      const videoParam = video ? `&video=${video}` : '';
+      const resp = await fetch(`/api/samples?task=${taskKey}${videoParam}&n=${n}`);
       if (!resp.ok) {
         const err = await resp.json();
         showError(err.detail || 'Failed to load samples');
@@ -389,8 +531,12 @@
     }
   }
 
-  // ── Action histogram ──────────────────────────────────────────────────────
+  // ── Action colors (shared between histogram bars and label pills) ─────────
+  // Order matches HEICHOLE_LABELS action names: Grasp, Hold, Cut, Clip
   const ACTION_COLORS = ['#3b82f6', '#f59e0b', '#10b981', '#ef4444'];
+  const ACTION_COLOR_MAP = { 'Grasp': '#3b82f6', 'Hold': '#f59e0b', 'Cut': '#10b981', 'Clip': '#ef4444' };
+
+  // ── Action histogram ──────────────────────────────────────────────────────
 
   async function loadActionHistogram(video) {
     const resp = await fetch(`/api/action_histogram?video=${video}`);
@@ -495,6 +641,10 @@
     if (!label || Object.keys(label).length === 0) return ['Unknown'];
     if (label.type === 'single') return [label.label];
     if (label.type === 'multi') return label.labels.length > 0 ? label.labels : ['Unknown'];
+    if (label.type === 'bbox') {
+      const lbls = [...new Set(label.boxes.map(b => b.label))];
+      return lbls.length > 0 ? lbls : ['Unknown'];
+    }
     return ['Unknown'];
   }
 
@@ -564,15 +714,35 @@
     grid.innerHTML = '';
     document.getElementById('empty-state').classList.add('hidden');
 
-    for (const s of samples) {
+    for (const [idx, s] of samples.entries()) {
       const card = document.createElement('div');
       card.className = 'frame-card bg-white rounded-xl overflow-hidden shadow-sm border border-gray-100';
 
+      // Image wrapper (needed for bbox overlay positioning)
+      const imgWrap = document.createElement('div');
+      imgWrap.className = 'relative w-full bg-gray-100 cursor-zoom-in';
+      imgWrap.style.aspectRatio = '16/9';
+
       const img = document.createElement('img');
       img.src = s.image_url;
-      img.className = 'w-full aspect-video object-cover bg-gray-100 cursor-zoom-in';
+      img.className = 'w-full h-full object-cover';
       img.loading = 'lazy';
-      img.addEventListener('click', () => openLightbox(s.image_url, `${s.video}  ·  frame ${s.frame_idx}`));
+      img.addEventListener('click', () => openLightbox(s.image_url, `${s.video}  ·  frame ${s.frame_idx}`, s.label, idx));
+      imgWrap.appendChild(img);
+
+      // Bbox overlays
+      if (s.label && s.label.type === 'bbox') {
+        s.label.boxes.forEach(box => {
+          const div = document.createElement('div');
+          div.className = 'absolute pointer-events-none';
+          div.style.cssText = `
+            left:${box.x0_pct}%; top:${box.y0_pct}%;
+            width:${box.x1_pct - box.x0_pct}%; height:${box.y1_pct - box.y0_pct}%;
+            border: 2px solid ${box.color};
+          `;
+          imgWrap.appendChild(div);
+        });
+      }
 
       const info = document.createElement('div');
       info.className = 'p-2';
@@ -585,7 +755,7 @@
       const labelDiv = renderLabel(s.label);
       info.appendChild(labelDiv);
 
-      card.appendChild(img);
+      card.appendChild(imgWrap);
       card.appendChild(info);
       grid.appendChild(card);
     }
@@ -603,6 +773,26 @@
       return div;
     }
 
+    if (label.type === 'bbox') {
+      const seen = new Set();
+      label.boxes.forEach(b => seen.add(b.label));
+      if (seen.size === 0) {
+        const pill = document.createElement('span');
+        pill.className = 'label-pill bg-gray-100 text-gray-400 rounded px-2 py-0.5';
+        pill.textContent = 'no boxes';
+        div.appendChild(pill);
+      } else {
+        seen.forEach(l => {
+          const pill = document.createElement('span');
+          pill.className = 'label-pill text-white rounded-full px-2 py-0.5 font-medium';
+          pill.style.background = ({"cystic_plate":"#f59e0b","calot_triangle":"#10b981","cystic_artery":"#ef4444","cystic_duct":"#3b82f6","gallbladder":"#8b5cf6","tool":"#ec4899"})[l] || '#aaa';
+          pill.textContent = l.replace('_', ' ');
+          div.appendChild(pill);
+        });
+      }
+      return div;
+    }
+
     if (label.type === 'single') {
       const pill = document.createElement('span');
       pill.className = 'label-pill bg-blue-100 text-blue-700 rounded-full px-2 py-0.5 font-medium';
@@ -617,7 +807,13 @@
       } else {
         for (const l of label.labels) {
           const pill = document.createElement('span');
-          pill.className = 'label-pill bg-green-100 text-green-700 rounded-full px-2 py-0.5 font-medium';
+          const color = ACTION_COLOR_MAP[l];
+          if (color) {
+            pill.className = 'label-pill text-white rounded-full px-2 py-0.5 font-medium';
+            pill.style.background = color;
+          } else {
+            pill.className = 'label-pill bg-green-100 text-green-700 rounded-full px-2 py-0.5 font-medium';
+          }
           pill.textContent = l;
           div.appendChild(pill);
         }
@@ -651,7 +847,7 @@
   document.getElementById('refresh-btn').addEventListener('click', () => {
     if (!selectedTask || !selectedDataset) return;
     const taskKey = `${selectedDataset}_${selectedTask}`;
-    const video = document.getElementById('video-select').value;
+    const video = document.getElementById('video-select').value || null;
     loadSamples(taskKey, video);
   });
 
@@ -668,28 +864,94 @@
   <!-- Lightbox -->
   <div id="lightbox" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/80 backdrop-blur-sm"
        onclick="closeLightbox()">
-    <button class="absolute top-4 right-5 text-white text-3xl leading-none opacity-70 hover:opacity-100">&times;</button>
-    <img id="lightbox-img" src="" alt=""
-         class="max-w-[90vw] max-h-[90vh] rounded-lg shadow-2xl object-contain"
-         onclick="event.stopPropagation()" />
-    <div id="lightbox-caption" class="absolute bottom-5 left-1/2 -translate-x-1/2 text-white text-sm bg-black/50 rounded-full px-4 py-1.5"></div>
+    <button class="absolute top-4 right-5 text-white text-3xl leading-none opacity-70 hover:opacity-100" onclick="closeLightbox()">&times;</button>
+    <!-- Prev -->
+    <button onclick="event.stopPropagation(); navigateLightbox(-1)"
+      class="absolute left-4 top-1/2 -translate-y-1/2 text-white bg-black/40 hover:bg-black/70 rounded-full w-10 h-10 flex items-center justify-center text-xl transition">&#8592;</button>
+    <!-- Next -->
+    <button onclick="event.stopPropagation(); navigateLightbox(1)"
+      class="absolute right-4 top-1/2 -translate-y-1/2 text-white bg-black/40 hover:bg-black/70 rounded-full w-10 h-10 flex items-center justify-center text-xl transition">&#8594;</button>
+    <div class="flex flex-col items-center gap-3" onclick="event.stopPropagation()">
+      <div id="lightbox-inner" class="relative">
+        <img id="lightbox-img" src="" alt=""
+             class="max-w-[90vw] max-h-[85vh] rounded-lg shadow-2xl object-contain block" />
+        <div id="lightbox-boxes" class="absolute inset-0 pointer-events-none"></div>
+      </div>
+      <!-- Caption + legend row -->
+      <div class="flex items-center gap-4 flex-wrap justify-center">
+        <span id="lightbox-caption" class="text-white text-sm bg-black/50 rounded-full px-4 py-1.5"></span>
+        <div id="lightbox-legend" class="hidden items-center gap-3 flex-wrap bg-black/50 rounded-full px-4 py-1.5"></div>
+      </div>
+    </div>
   </div>
 
 <script>
-  function openLightbox(src, caption) {
+  let lightboxIndex = -1;
+
+  function openLightbox(src, caption, label, index) {
+    lightboxIndex = index ?? -1;
     const lb = document.getElementById('lightbox');
-    document.getElementById('lightbox-img').src = src;
+    const img = document.getElementById('lightbox-img');
+    const boxesDiv = document.getElementById('lightbox-boxes');
+    const legendDiv = document.getElementById('lightbox-legend');
+    img.src = src;
     document.getElementById('lightbox-caption').textContent = caption;
+    boxesDiv.innerHTML = '';
+    legendDiv.innerHTML = '';
+    legendDiv.classList.add('hidden');
+    legendDiv.classList.remove('flex');
     lb.classList.remove('hidden');
     lb.classList.add('flex');
+
+    if (label && label.type === 'bbox' && label.boxes.length > 0) {
+      // Build legend (deduplicated by label)
+      const seen = new Set();
+      label.boxes.forEach(box => {
+        if (seen.has(box.label)) return;
+        seen.add(box.label);
+        const item = document.createElement('span');
+        item.className = 'flex items-center gap-1.5 text-white text-xs';
+        item.innerHTML = `<span style="width:10px;height:10px;border-radius:2px;background:${box.color};display:inline-block;flex-shrink:0"></span>${box.label.replace(/_/g, ' ')}`;
+        legendDiv.appendChild(item);
+      });
+      legendDiv.classList.remove('hidden');
+      legendDiv.classList.add('flex');
+
+      img.onload = () => {
+        label.boxes.forEach(box => {
+          const div = document.createElement('div');
+          div.className = 'absolute pointer-events-none';
+          div.style.cssText = `
+            left:${box.x0_pct}%; top:${box.y0_pct}%;
+            width:${box.x1_pct - box.x0_pct}%; height:${box.y1_pct - box.y0_pct}%;
+            border: 2px solid ${box.color};
+          `;
+          boxesDiv.appendChild(div);
+        });
+      };
+    }
   }
+
+  function navigateLightbox(delta) {
+    if (lightboxIndex < 0 || allSamples.length === 0) return;
+    const next = (lightboxIndex + delta + allSamples.length) % allSamples.length;
+    const s = allSamples[next];
+    openLightbox(s.image_url, `${s.video}  ·  frame ${s.frame_idx}`, s.label, next);
+  }
+
   function closeLightbox() {
     const lb = document.getElementById('lightbox');
     lb.classList.add('hidden');
     lb.classList.remove('flex');
     document.getElementById('lightbox-img').src = '';
   }
-  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbox(); });
+  document.addEventListener('keydown', e => {
+    const lb = document.getElementById('lightbox');
+    if (lb.classList.contains('hidden')) return;
+    if (e.key === 'Escape') closeLightbox();
+    else if (e.key === 'ArrowRight') navigateLightbox(1);
+    else if (e.key === 'ArrowLeft')  navigateLightbox(-1);
+  });
 </script>
 </body>
 </html>

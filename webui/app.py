@@ -1,5 +1,6 @@
 import re
 import os
+import json
 import random
 import sys
 from pathlib import Path
@@ -41,10 +42,40 @@ HEICHOLE_LABELS = {
 }
 
 TASK_DATASET_ANNOTATION = {
-    "heichole_phase_recognition":   ("HeiChole", "phase"),
-    "heichole_tool_recognition":    ("HeiChole", "tool"),
-    "heichole_action_recognition":  ("HeiChole", "action"),
+    "heichole_phase_recognition":        ("HeiChole", "phase"),
+    "heichole_tool_recognition":         ("HeiChole", "tool"),
+    "heichole_action_recognition":       ("HeiChole", "action"),
+    "endoscapes_object_detection":       ("endoscapes", "bbox"),
 }
+
+# Classification of tasks: "frame" (per-frame annotation) or "video" (per-video annotation)
+TASK_GRANULARITY = {
+    "phase_recognition":    "frame",
+    "tool_recognition":     "frame",
+    "action_recognition":   "frame",
+    "object_detection":     "frame",
+    "cvs_assessment":       "frame",
+    "triplet_recognition":  "frame",
+    "error_detection":      "frame",
+    "error_recognition":    "frame",
+    "gesture_classification": "frame",
+    "maneuver_classification": "frame",
+    "anatomy_presence":     "frame",
+    "skill_assessment":     "video",
+}
+
+ENDOSCAPES_LABELS = ["background", "cystic_plate", "calot_triangle",
+                     "cystic_artery", "cystic_duct", "gallbladder", "tool"]
+ENDOSCAPES_COLORS = {
+    "cystic_plate":    "#f59e0b",
+    "calot_triangle":  "#10b981",
+    "cystic_artery":   "#ef4444",
+    "cystic_duct":     "#3b82f6",
+    "gallbladder":     "#8b5cf6",
+    "tool":            "#ec4899",
+    "background":      "#9ca3af",
+}
+ENDOSCAPES_IMG_W, ENDOSCAPES_IMG_H = 854, 480
 
 ANNOTATION_SUFFIX = {
     "phase":  "_Annotation_Phase.csv",
@@ -91,6 +122,56 @@ def heichole_videos() -> list[str]:
     if not frame_dir.exists():
         return []
     return sorted(p.name for p in frame_dir.iterdir() if p.is_dir())
+
+
+# ── Endoscapes helpers ────────────────────────────────────────────────────────
+@lru_cache(maxsize=1)
+def _load_endoscapes_coco() -> tuple[dict[str, list[dict]], dict[str, tuple[int, int]]]:
+    """Parse test/annotation_coco.json → ({stem: [bbox_dict,...]}, {stem: (W,H)})."""
+    coco_path = DATASET_ROOT / "endoscapes" / "test" / "annotation_coco.json"
+    with open(coco_path) as f:
+        coco = json.load(f)
+    cat_map = {c["id"]: c["name"] for c in coco["categories"]}
+    img_map  = {img["id"]: img for img in coco["images"]}
+    frame_boxes: dict[str, list[dict]] = {}
+    frame_dims:  dict[str, tuple[int, int]] = {}
+    for img in coco["images"]:
+        stem = img["file_name"].replace(".jpg", "")
+        frame_dims[stem] = (img["width"], img["height"])
+        frame_boxes.setdefault(stem, [])
+    for ann in coco["annotations"]:
+        img  = img_map[ann["image_id"]]
+        stem = img["file_name"].replace(".jpg", "")
+        W, H = img["width"], img["height"]
+        x, y, w, h = ann["bbox"]
+        x0, y0, x1, y1 = x, y, x + w, y + h
+        label = cat_map.get(ann["category_id"], str(ann["category_id"]))
+        frame_boxes[stem].append({
+            "label": label,
+            "color": ENDOSCAPES_COLORS.get(label, "#aaa"),
+            "x0": round(x0), "y0": round(y0), "x1": round(x1), "y1": round(y1),
+            "x0_pct": round(x0 / W * 100, 2),
+            "y0_pct": round(y0 / H * 100, 2),
+            "x1_pct": round(x1 / W * 100, 2),
+            "y1_pct": round(y1 / H * 100, 2),
+        })
+    return frame_boxes, frame_dims
+
+
+@lru_cache(maxsize=1)
+def endoscapes_annotated_test_frames() -> dict[str, list[str]]:
+    """Return {video_id: [frame_key, ...]} for all BBox201 test frames (40 vids, 312 frames)."""
+    frame_boxes, _ = _load_endoscapes_coco()
+    result: dict[str, list[str]] = {}
+    for stem in sorted(frame_boxes):
+        vid = stem.split("_")[0]
+        result.setdefault(vid, []).append(stem)
+    return result
+
+
+def get_endoscapes_bboxes(frame_key: str) -> list[dict]:
+    frame_boxes, _ = _load_endoscapes_coco()
+    return frame_boxes.get(frame_key, [])
 
 
 def heichole_frames(video: str) -> list[Path]:
@@ -190,7 +271,95 @@ def get_prompts_for_task(task_key: str) -> dict[str, str]:
 # ── API ───────────────────────────────────────────────────────────────────────
 @app.get("/api/tasks")
 def get_tasks():
-    return parse_task_dataset_map()
+    task_map = dict(parse_task_dataset_map())
+    # Inject tasks that have data loaders but no prompt in prompts.py
+    for full_key, (dataset, _) in TASK_DATASET_ANNOTATION.items():
+        parts = full_key.split("_")
+        TASK_KEYWORDS = {"phase", "tool", "action", "skill", "error", "gesture",
+                         "triplet", "cvs", "maneuver", "anatomy", "object", "detection"}
+        split_idx = next((i for i, p in enumerate(parts) if p in TASK_KEYWORDS), 1)
+        task_type = "_".join(parts[split_idx:])
+        ds = "_".join(parts[:split_idx])
+        if task_type:
+            task_map.setdefault(task_type, [])
+            if ds not in task_map[task_type]:
+                task_map[task_type].append(ds)
+    return {k: sorted(v) for k, v in sorted(task_map.items())}
+
+
+@app.get("/api/known_tasks")
+def get_known_tasks():
+    """Return list of task keys that have a registered data loader."""
+    return list(TASK_DATASET_ANNOTATION.keys())
+
+
+def _heichole_frame_count() -> int:
+    base = DATASET_ROOT / "HeiChole" / "extracted_frames"
+    if not base.exists():
+        return 0
+    return sum(len(list(d.glob("*.png"))) for d in base.iterdir() if d.is_dir())
+
+
+def _heichole_video_count() -> int:
+    base = DATASET_ROOT / "HeiChole" / "extracted_frames"
+    if not base.exists():
+        return 0
+    return sum(1 for d in base.iterdir() if d.is_dir())
+
+
+def _task_suffix(task_key: str) -> str:
+    """Extract the task type suffix from a full task key like 'heichole_phase_recognition'."""
+    TASK_KEYWORDS = {"phase", "tool", "action", "skill", "error", "gesture",
+                     "triplet", "cvs", "maneuver", "anatomy", "object", "detection"}
+    parts = task_key.split("_")
+    split_idx = next((i for i, p in enumerate(parts) if p in TASK_KEYWORDS), len(parts))
+    return "_".join(parts[split_idx:])
+
+
+@app.get("/api/dashboard")
+def get_dashboard():
+    entries = []
+    for task_key, (dataset, ann_type) in TASK_DATASET_ANNOTATION.items():
+        task_type = _task_suffix(task_key)
+        granularity = TASK_GRANULARITY.get(task_type, "frame")
+
+        if dataset == "HeiChole":
+            if granularity == "frame":
+                count = _heichole_frame_count()
+                unit = "frames"
+                videos = _heichole_video_count()
+            else:
+                # video-level: count videos with skill annotations
+                skill_dir = DATASET_ROOT / "HeiChole" / "Annotations" / "Skill"
+                count = len(set(
+                    p.name.split("_Skill")[0].split("_Calot")[0].split("_Dissection")[0]
+                    for p in skill_dir.glob("*_Skill.csv")
+                )) if skill_dir.exists() else 0
+                unit = "videos"
+                videos = count
+
+        elif dataset == "endoscapes":
+            frame_boxes, _ = _load_endoscapes_coco()
+            count = sum(1 for v in frame_boxes.values() if v)
+            unit = "frames"
+            videos = len(endoscapes_annotated_test_frames())
+
+        else:
+            count = 0
+            unit = "frames"
+            videos = 0
+
+        entries.append({
+            "task_key": task_key,
+            "dataset": dataset,
+            "task_type": task_type,
+            "granularity": granularity,
+            "count": count,
+            "unit": unit,
+            "videos": videos,
+        })
+
+    return sorted(entries, key=lambda e: (e["granularity"], e["dataset"], e["task_type"]))
 
 
 @app.get("/api/videos")
@@ -198,13 +367,14 @@ def get_videos(task: str = Query(...)):
     dataset_ann = TASK_DATASET_ANNOTATION.get(task)
     if dataset_ann and dataset_ann[0] == "HeiChole":
         return heichole_videos()
+    # endoscapes: no per-video selection — return empty so UI hides dropdown
     return []
 
 
 @app.get("/api/samples")
 def get_samples(
     task: str = Query(...),
-    video: str = Query(...),
+    video: str = Query(None),
     n: int = Query(12),
     seed: int = Query(42),
 ):
@@ -217,11 +387,12 @@ def get_samples(
         frames = heichole_frames(video)
         if not frames:
             raise HTTPException(404, f"No frames found for video '{video}'")
-        # Sample evenly across the video
         df = load_heichole_annotation(video, ann_type)
-        rng = random.Random(seed)
-        stride = max(1, len(frames) // n)
-        candidates = frames[::stride][:n]
+        if n == 0:
+            candidates = frames
+        else:
+            stride = max(1, len(frames) // n)
+            candidates = frames[::stride][:n]
         results = []
         for frame_path in candidates:
             frame_idx = int(frame_path.stem.split("_")[-1])
@@ -231,6 +402,26 @@ def get_samples(
                 "frame_idx": frame_idx,
                 "video": video,
                 "label": label,
+            })
+        return results
+
+    if dataset == "endoscapes":
+        frame_boxes, _ = _load_endoscapes_coco()
+        # Only frames that have at least one bounding box
+        annotated = sorted(k for k, v in frame_boxes.items() if v)
+        if n == 0:
+            candidates = annotated
+        else:
+            stride = max(1, len(annotated) // n)
+            candidates = annotated[::stride][:n]
+        results = []
+        for key in candidates:
+            vid_id, frame_num = key.split("_", 1)
+            results.append({
+                "image_url": f"/image/endoscapes/test/{key}.jpg",
+                "frame_idx": int(frame_num),
+                "video": vid_id,
+                "label": {"type": "bbox", "boxes": frame_boxes[key]},
             })
         return results
 
