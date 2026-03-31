@@ -46,7 +46,6 @@
 
     <!-- Sidebar: Task Tabs -->
     <aside class="w-52 bg-white border-r border-gray-200 overflow-y-auto shrink-0 py-3">
-      <p class="px-4 text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Tasks</p>
       <div id="task-list" class="flex flex-col gap-0.5 px-2">
         <div class="skeleton h-8 rounded mb-1"></div>
         <div class="skeleton h-8 rounded mb-1"></div>
@@ -139,6 +138,9 @@
         <h2 class="text-lg font-semibold text-gray-700 mb-1">Available Datasets</h2>
         <p class="text-sm text-gray-400 mb-4">Click a card to start browsing</p>
 
+        <!-- Totals row -->
+        <div id="dash-totals" class="flex gap-4 mb-6"></div>
+
         <!-- Dataset filter chips -->
         <div id="dash-dataset-filters" class="flex flex-wrap gap-2 mb-6"></div>
 
@@ -152,6 +154,9 @@
           <div id="dash-video-cards" class="grid gap-4" style="grid-template-columns: repeat(auto-fill, minmax(200px,1fr))"></div>
         </div>
       </div>
+
+      <!-- Video task view (skill table / gesture distribution) -->
+      <div id="video-task-section" class="hidden"></div>
 
       <!-- Empty state -->
       <div id="empty-state" class="hidden flex flex-col items-center justify-center py-20 text-gray-400">
@@ -174,7 +179,16 @@
   let allSamples = [];
   let knownTasks = [];
   let dashboardData = [];
+  let dashboardTotals = { frames: 0, video_items: 0 };
   let activeFilter = null;
+
+  // Video task state
+  let currentVideoItems = [];   // all visible items across sections (for modal navigation)
+  let videoModalIndex = -1;
+  let _skillData = null;
+  let _skillGroupState = {};    // {groupName: {n, expFilter, scoreFilters, sortCol, sortDir}}
+  let _classData = null, _classN = 20, _classFilter = null;
+  let _gestureGroupState = {}; // {category: {n, labelFilter}}
 
   // ── Boot ────────────────────────────────────────────────────────────────
   // ── Copy share URL ───────────────────────────────────────────────────────
@@ -219,7 +233,9 @@
     ]);
     taskMap = await tasksResp.json();
     knownTasks = await knownResp.json();
-    dashboardData = await dashResp.json();
+    const dashResp2 = await dashResp.json();
+    dashboardData = dashResp2.entries;
+    dashboardTotals = dashResp2.totals;
     renderTaskList();
 
     // Restore state from URL if present
@@ -241,11 +257,26 @@
     document.getElementById('dataset-section').classList.add('hidden');
     document.getElementById('prompt-section').classList.add('hidden');
     document.getElementById('video-section').classList.add('hidden');
+    document.getElementById('video-task-section').classList.add('hidden');
+    document.getElementById('video-task-section').innerHTML = '';
     document.getElementById('frame-grid').innerHTML = '';
     document.getElementById('filter-section').classList.add('hidden');
     document.getElementById('timeline-section').classList.add('hidden');
     document.getElementById('video-player-section').classList.add('hidden');
     document.getElementById('action-histogram-section').classList.add('hidden');
+    document.getElementById('n-input').closest('div').classList.remove('hidden');
+
+    // Totals
+    const totalsDiv = document.getElementById('dash-totals');
+    totalsDiv.innerHTML = `
+      <div class="bg-blue-50 border border-blue-100 rounded-xl px-5 py-3 flex items-center gap-3">
+        <span class="text-2xl font-bold text-blue-600">${dashboardTotals.frames.toLocaleString()}</span>
+        <span class="text-sm text-blue-500">total frames</span>
+      </div>
+      <div class="bg-purple-50 border border-purple-100 rounded-xl px-5 py-3 flex items-center gap-3">
+        <span class="text-2xl font-bold text-purple-600">${dashboardTotals.video_items.toLocaleString()}</span>
+        <span class="text-sm text-purple-500">video items</span>
+      </div>`;
 
     renderDashboardFilters();
     renderDashboardCards();
@@ -312,12 +343,30 @@
     const container = document.getElementById('task-list');
     container.innerHTML = '';
 
-    // Only show tasks that have at least one entry with count > 0 in dashboardData
     const availableTaskTypes = new Set(dashboardData.filter(e => e.count > 0).map(e => e.task_type));
+    const frameTaskTypes = new Set(dashboardData.filter(e => e.count > 0 && e.granularity === 'frame').map(e => e.task_type));
+    const videoTaskTypes = new Set(dashboardData.filter(e => e.count > 0 && e.granularity === 'video').map(e => e.task_type));
 
-    // Add a "Home" button at the top
+    const makeSection = (label, taskSet) => {
+      if (taskSet.size === 0) return;
+      const header = document.createElement('p');
+      header.className = 'px-3 pt-3 pb-1 text-xs font-semibold text-gray-400 uppercase tracking-wider';
+      header.textContent = label;
+      container.appendChild(header);
+      for (const taskType of Object.keys(taskMap)) {
+        if (!taskSet.has(taskType)) continue;
+        const btn = document.createElement('button');
+        btn.className = 'task-tab text-left px-3 py-2 rounded-md text-sm text-gray-700 font-medium';
+        btn.textContent = formatTaskName(taskType);
+        btn.dataset.task = taskType;
+        btn.addEventListener('click', () => selectTask(taskType));
+        container.appendChild(btn);
+      }
+    };
+
+    // Home
     const homeBtn = document.createElement('button');
-    homeBtn.className = 'task-tab text-left px-3 py-2 rounded-md text-sm text-gray-500 font-medium mb-1';
+    homeBtn.className = 'task-tab text-left px-3 py-2 rounded-md text-sm text-gray-700 font-medium';
     homeBtn.textContent = 'Home';
     homeBtn.dataset.task = '__home__';
     homeBtn.addEventListener('click', () => {
@@ -330,15 +379,8 @@
     });
     container.appendChild(homeBtn);
 
-    for (const taskType of Object.keys(taskMap)) {
-      if (!availableTaskTypes.has(taskType)) continue;
-      const btn = document.createElement('button');
-      btn.className = 'task-tab text-left px-3 py-2 rounded-md text-sm text-gray-700 font-medium';
-      btn.textContent = formatTaskName(taskType);
-      btn.dataset.task = taskType;
-      btn.addEventListener('click', () => selectTask(taskType));
-      container.appendChild(btn);
-    }
+    makeSection('Frames', frameTaskTypes);
+    makeSection('Videos', videoTaskTypes);
   }
 
   function formatTaskName(t) {
@@ -381,10 +423,14 @@
 
     // Clear grid & hide dashboard/video/prompt sections
     document.getElementById('dashboard').classList.add('hidden');
+    document.getElementById('video-task-section').classList.add('hidden');
+    document.getElementById('video-task-section').innerHTML = '';
     document.getElementById('frame-grid').innerHTML = '';
     document.getElementById('video-section').classList.add('hidden');
     document.getElementById('prompt-section').classList.add('hidden');
     document.getElementById('empty-state').classList.remove('hidden');
+    // Restore samples row visibility (may have been hidden by video task)
+    document.getElementById('n-input').closest('div').classList.remove('hidden');
 
     const targetDataset = restoreDataset && datasets.includes(restoreDataset) ? restoreDataset : datasets[0];
     if (targetDataset) selectDataset(taskType, targetDataset, restoreVideo, restoreFilter);
@@ -471,10 +517,17 @@
       loadExtras(taskKey, targetVideo);
       loadSamples(taskKey, targetVideo, restoreFilter);
     } else if (knownTasks.includes(taskKey)) {
-      // Task is known but needs no per-video selection (e.g. endoscapes all frames)
-      videoSec.classList.add('hidden');
-      loadExtras(taskKey, null);
-      loadSamples(taskKey, null, restoreFilter);
+      const entry = dashboardData.find(e => e.task_key === taskKey);
+      if (entry && entry.granularity === 'video') {
+        videoSec.classList.add('hidden');
+        document.getElementById('n-input').closest('div').classList.add('hidden');
+        loadVideoSummary(taskType, dataset);
+      } else {
+        // Frame task, no per-video selector (e.g. endoscapes)
+        videoSec.classList.add('hidden');
+        loadExtras(taskKey, null);
+        loadSamples(taskKey, null, restoreFilter);
+      }
     } else {
       videoSec.classList.add('hidden');
       showUnsupported(dataset, taskType);
@@ -822,6 +875,354 @@
     return div;
   }
 
+  // ── Video task summary ───────────────────────────────────────────────────
+  async function loadVideoSummary(taskType, dataset) {
+    const sec = document.getElementById('video-task-section');
+    const empty = document.getElementById('empty-state');
+    sec.innerHTML = '<div class="text-sm text-gray-400 py-8 text-center">Loading…</div>';
+    sec.classList.remove('hidden');
+    empty.classList.add('hidden');
+    document.getElementById('frame-grid').innerHTML = '';
+    document.getElementById('filter-section').classList.add('hidden');
+
+    const resp = await fetch(`/api/video_summary?task=${taskType}&dataset=${dataset}`);
+    if (!resp.ok) { sec.innerHTML = '<div class="text-red-400 py-8 text-center">Failed to load</div>'; return; }
+    const data = await resp.json();
+
+    if (data.type === 'skill') renderSkillTable(data);
+    else renderClassificationView(data);
+  }
+
+  function renderSkillTable(data) {
+    _skillData = data;
+    // Initialize per-group state (reset on data change)
+    _skillGroupState = {};
+    const groups = [...new Set(data.videos.map(v => v.category || 'All'))];
+    for (const g of groups)
+      _skillGroupState[g] = { n: 20, expFilter: null, scoreFilters: {}, sortCol: null, sortDir: 'asc' };
+    _doRenderSkillTable();
+  }
+
+  // Per-group event handlers (called from inline onclick attributes)
+  function skillGroupChangeN(g, val) { _skillGroupState[g].n = parseInt(val); _doRenderSkillTable(); }
+  function skillGroupSort(g, col) {
+    const gs = _skillGroupState[g];
+    if (gs.sortCol === col) gs.sortDir = gs.sortDir === 'asc' ? 'desc' : 'asc';
+    else { gs.sortCol = col; gs.sortDir = 'asc'; }
+    _doRenderSkillTable();
+  }
+  function skillGroupFilterExp(g, lvl) { _skillGroupState[g].expFilter = lvl; _doRenderSkillTable(); }
+  function skillGroupFilterScore(g, ci, sc) { _skillGroupState[g].scoreFilters[ci] = sc; _doRenderSkillTable(); }
+
+  function _doRenderSkillTable() {
+    const sec = document.getElementById('video-task-section');
+    const data = _skillData;
+    const scoreColor = s => data.score_colors[s - 1] || '#9ca3af';
+    const hasExp = data.videos.some(v => v.experience !== undefined);
+
+    // Build group map preserving order
+    const groupMap = {};
+    for (const v of data.videos) { const k = v.category || 'All'; (groupMap[k] = groupMap[k] || []).push(v); }
+    const multiGroup = Object.keys(groupMap).length > 1;
+
+    currentVideoItems = [];
+    let html = '';
+
+    for (const [grpName, grpVids] of Object.entries(groupMap)) {
+      const gs = _skillGroupState[grpName] || { n: 20, expFilter: null, scoreFilters: {}, sortCol: null, sortDir: 'asc' };
+
+      // Filter
+      let videos = grpVids.filter(v => {
+        if (gs.expFilter && v.experience !== gs.expFilter) return false;
+        for (const [ci, sc] of Object.entries(gs.scoreFilters))
+          if (sc !== null && v.scores[parseInt(ci)] !== sc) return false;
+        return true;
+      });
+
+      // Sort
+      if (gs.sortCol !== null) {
+        videos = [...videos].sort((a, b) => {
+          let av, bv;
+          if (gs.sortCol === 'video')    { av = a.video; bv = b.video; }
+          else if (gs.sortCol === 'exp') { av = a.experience || ''; bv = b.experience || ''; }
+          else { const ci = parseInt(gs.sortCol); av = a.scores[ci]; bv = b.scores[ci]; }
+          const d = av < bv ? -1 : av > bv ? 1 : 0;
+          return gs.sortDir === 'asc' ? d : -d;
+        });
+      }
+
+      const startIdx = currentVideoItems.length;
+      currentVideoItems.push(...videos);
+      const displayed = gs.n > 0 ? videos.slice(0, gs.n) : videos;
+
+      const sortIcon = col => gs.sortCol !== col
+        ? '<span class="opacity-30 ml-0.5">↕</span>'
+        : gs.sortDir === 'asc' ? '<span class="ml-0.5">↑</span>' : '<span class="ml-0.5">↓</span>';
+
+      if (multiGroup)
+        html += `<h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wider mt-6 mb-3">${grpName}</h3>`;
+
+      // ── Per-group filter panel ───────────────────────────────────────────
+      html += `<div class="bg-white border border-gray-200 rounded-xl p-4 mb-4">`;
+
+      // Samples row
+      html += `<div class="flex items-center gap-3 mb-3 flex-wrap">
+        <span class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Samples</span>
+        <select onchange="skillGroupChangeN('${grpName}', this.value)"
+          class="border border-gray-300 rounded-md px-2 py-1 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-400">
+          ${[10,20,50,100].map(v => `<option value="${v}"${gs.n===v?' selected':''}>${v}</option>`).join('')}
+          <option value="0"${gs.n===0?' selected':''}>All</option>
+        </select>
+        <span class="text-xs text-gray-400">${displayed.length} of ${videos.length} shown${videos.length < grpVids.length ? ` (filtered from ${grpVids.length})` : ''}</span>
+      </div>`;
+
+      // Experience filter
+      if (hasExp) {
+        html += `<div class="flex items-center gap-2 flex-wrap mb-2">
+          <span class="text-xs font-semibold text-gray-500 w-28 shrink-0">Level</span>`;
+        for (const lvl of [null, 'Novice', 'Intermediate', 'Expert']) {
+          const active = gs.expFilter === lvl;
+          html += `<button onclick="skillGroupFilterExp('${grpName}', ${lvl ? `'${lvl}'` : 'null'})"
+            class="px-2.5 py-0.5 rounded-full text-xs font-medium border transition ${
+              active ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-300 hover:border-blue-400 hover:text-blue-600'
+            }">${lvl ?? 'All'}</button>`;
+        }
+        html += `</div>`;
+      }
+
+      // Score filters per criterion
+      for (let ci = 0; ci < data.criteria.length; ci++) {
+        const sc = gs.scoreFilters[ci] ?? null;
+        html += `<div class="flex items-center gap-2 flex-wrap mb-1">
+          <span class="text-xs font-semibold text-gray-500 w-28 shrink-0 leading-tight">${data.criteria[ci]}</span>`;
+        for (const sv of [null, 1, 2, 3, 4, 5]) {
+          const active = sc === sv;
+          const style = sv !== null && active ? `background:${scoreColor(sv)};border-color:${scoreColor(sv)};color:white;` : '';
+          const cls = active && sv === null ? 'bg-blue-600 text-white border-blue-600'
+            : active ? '' : 'bg-white text-gray-600 border-gray-300 hover:border-gray-400 hover:text-gray-700';
+          html += `<button onclick="skillGroupFilterScore('${grpName}', ${ci}, ${sv === null ? 'null' : sv})"
+            class="px-2.5 py-0.5 rounded-full text-xs font-medium border transition ${cls}" style="${style}">${sv ?? 'All'}</button>`;
+        }
+        html += `</div>`;
+      }
+      html += `</div>`; // end filter panel
+
+      // ── Table ───────────────────────────────────────────────────────────
+      html += `<div class="bg-white border border-gray-200 rounded-xl overflow-auto mb-6">
+        <table class="w-full text-sm border-collapse"><thead>
+          <tr class="border-b border-gray-100 bg-gray-50">
+            <th class="text-left px-4 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap cursor-pointer hover:text-blue-600 select-none"
+                onclick="skillGroupSort('${grpName}', 'video')">Video ${sortIcon('video')}</th>`;
+      if (hasExp)
+        html += `<th class="text-left px-4 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wide cursor-pointer hover:text-blue-600 select-none"
+                     onclick="skillGroupSort('${grpName}', 'exp')">Level ${sortIcon('exp')}</th>`;
+      for (let ci = 0; ci < data.criteria.length; ci++)
+        html += `<th class="text-center px-3 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap cursor-pointer hover:text-blue-600 select-none"
+                     onclick="skillGroupSort('${grpName}', '${ci}')">${data.criteria[ci]} ${sortIcon(String(ci))}</th>`;
+      html += `</tr></thead><tbody>`;
+
+      for (let i = 0; i < displayed.length; i++) {
+        const v = displayed[i];
+        const hasVideo = !!v.video_url;
+        const modalIdx = startIdx + i;
+        const rowCls = (v.is_test ? 'bg-blue-50 ' : '') + (hasVideo ? 'cursor-pointer' : '');
+        const clickAttr = hasVideo ? `onclick="openVideoModalByIndex(${modalIdx})"` : '';
+        html += `<tr class="border-b border-gray-50 hover:bg-gray-100 transition ${rowCls}" ${clickAttr}>
+          <td class="px-4 py-2 font-medium text-gray-700 whitespace-nowrap">
+            ${v.video}${v.is_test ? ' <span class="text-xs text-blue-500 font-normal">test</span>' : ''}
+            ${hasVideo ? '<span class="ml-1 text-gray-400 text-xs">▶</span>' : ''}
+          </td>`;
+        if (hasExp) html += `<td class="px-4 py-2 text-gray-500 text-xs">${v.experience || '—'}</td>`;
+        for (const s of v.scores)
+          html += `<td class="px-3 py-2 text-center"><span class="inline-block w-7 h-7 rounded-full text-white text-xs font-bold leading-7"
+                style="background:${scoreColor(s)}">${s}</span></td>`;
+        html += `</tr>`;
+      }
+      html += `</tbody></table></div>`;
+    }
+
+    // Score legend
+    html += `<div class="flex items-center gap-3 mt-2 flex-wrap"><span class="text-xs text-gray-400">Score:</span>`;
+    for (let i = 1; i <= 5; i++)
+      html += `<span class="inline-block w-5 h-5 rounded-full text-white text-xs font-bold leading-5 text-center"
+                    style="background:${data.score_colors[i-1]}">${i}</span>`;
+    html += `</div>`;
+    sec.innerHTML = html;
+  }
+
+  function renderClassificationView(data) {
+    _classData = data;
+    if (data.label_type === 'gesture') {
+      const cats = [...new Set(data.clips.map(c => c.category))].filter(Boolean).sort();
+      _gestureGroupState = {};
+      for (const cat of cats) _gestureGroupState[cat] = { n: 20, labelFilter: null };
+    } else {
+      _classN = 20; _classFilter = null;
+    }
+    _doRenderClassificationView();
+  }
+
+  // Maneuver single-section handlers
+  function classChangeN(val) { _classN = parseInt(val); _doRenderClassificationView(); }
+  function classFilter(val) { _classFilter = val; _doRenderClassificationView(); }
+
+  // Gesture per-category handlers
+  function gestureGroupChangeN(cat, val) { _gestureGroupState[cat].n = parseInt(val); _doRenderClassificationView(); }
+  function gestureGroupFilter(cat, lbl) { _gestureGroupState[cat].labelFilter = lbl; _doRenderClassificationView(); }
+
+  function _doRenderClassificationView() {
+    const sec = document.getElementById('video-task-section');
+    const data = _classData;
+    const isGesture = data.label_type === 'gesture';
+
+    // Global distribution chart (always full)
+    const total = Object.values(data.distribution).reduce((a, b) => a + b, 0);
+    let html = `<div class="bg-white border border-gray-200 rounded-xl p-5 mb-6">
+      <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">Distribution</h3>
+      <div class="flex flex-col gap-2">`;
+    const sortedDist = Object.entries(data.distribution).sort((a, b) => b[1] - a[1]);
+    const maxCount = sortedDist[0]?.[1] || 1;
+    for (const [lbl, cnt] of sortedDist) {
+      const pct = (cnt / total * 100).toFixed(1);
+      const barW = (cnt / maxCount * 100).toFixed(1);
+      const color = data.colors[lbl] || '#9ca3af';
+      html += `<div class="flex items-center gap-3">
+        <span class="text-sm text-gray-600 w-28 shrink-0 text-right">${lbl}</span>
+        <div class="flex-1 bg-gray-100 rounded-full h-5 overflow-hidden">
+          <div class="h-full rounded-full" style="width:${barW}%;background:${color}"></div>
+        </div>
+        <span class="text-xs text-gray-500 w-28 shrink-0">${pct}% (${cnt})</span>
+      </div>`;
+    }
+    html += `</div></div>`;
+
+    currentVideoItems = [];
+
+    if (isGesture) {
+      // ── Per-category sections ─────────────────────────────────────────────
+      const cats = [...new Set(data.clips.map(c => c.category))].filter(Boolean).sort();
+      for (const cat of cats) {
+        const gs = _gestureGroupState[cat] || { n: 20, labelFilter: null };
+        const catClips = data.clips.filter(c => c.category === cat);
+        const labels = [...new Set(catClips.map(c => c.label))].sort();
+
+        const filtered = gs.labelFilter ? catClips.filter(c => c.label === gs.labelFilter) : catClips;
+        const startIdx = currentVideoItems.length;
+        currentVideoItems.push(...filtered);
+        const displayed = gs.n > 0 ? filtered.slice(0, gs.n) : filtered;
+
+        html += `<h3 class="text-sm font-semibold text-gray-700 mt-6 mb-3">${cat}</h3>`;
+        html += `<div class="bg-white border border-gray-200 rounded-xl p-4 mb-4">`;
+
+        // N selector
+        html += `<div class="flex items-center gap-3 mb-3 flex-wrap">
+          <span class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Samples</span>
+          <select onchange="gestureGroupChangeN('${cat}', this.value)"
+            class="border border-gray-300 rounded-md px-2 py-1 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-400">
+            ${[10,20,50,100].map(v => `<option value="${v}"${gs.n===v?' selected':''}>${v}</option>`).join('')}
+            <option value="0"${gs.n===0?' selected':''}>All</option>
+          </select>
+          <span class="text-xs text-gray-400">${displayed.length} of ${filtered.length} shown${filtered.length < catClips.length ? ` (filtered)` : ''}</span>
+        </div>`;
+
+        // Gesture label filter chips
+        html += `<div class="flex flex-wrap gap-2">`;
+        const allActive = gs.labelFilter === null;
+        html += `<button onclick="gestureGroupFilter('${cat}', null)"
+          class="px-2.5 py-1 rounded-full text-xs font-medium border transition ${
+            allActive ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-300 hover:border-blue-400 hover:text-blue-600'
+          }">All (${catClips.length})</button>`;
+        for (const lbl of labels) {
+          const cnt = catClips.filter(c => c.label === lbl).length;
+          const color = data.colors[lbl] || '#6b7280';
+          const active = gs.labelFilter === lbl;
+          const style = active ? `background:${color};border-color:${color};color:white;` : '';
+          const cls = active ? '' : 'bg-white text-gray-600 border-gray-300 hover:border-gray-400 hover:text-gray-700';
+          html += `<button onclick="gestureGroupFilter('${cat}', '${lbl}')"
+            class="px-2.5 py-1 rounded-full text-xs font-medium border transition ${cls}" style="${style}">${lbl} (${cnt})</button>`;
+        }
+        html += `</div></div>`;
+
+        // Clip chips
+        html += `<div class="bg-white border border-gray-200 rounded-xl overflow-auto mb-2">
+          <div class="flex flex-wrap gap-2 p-4">`;
+        for (let i = 0; i < displayed.length; i++) {
+          const c = displayed[i];
+          const color = data.colors[c.label] || '#9ca3af';
+          const hasVideo = !!c.video_url;
+          const modalIdx = startIdx + i;
+          const clickAttr = hasVideo ? `onclick="openVideoModalByIndex(${modalIdx})" style="cursor:pointer"` : '';
+          html += `<div class="flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 text-xs hover:border-gray-300 transition" ${clickAttr}>
+            <span class="w-2 h-2 rounded-full shrink-0" style="background:${color}"></span>
+            <span class="text-gray-700 font-medium">${c.video}</span>
+            <span class="font-semibold" style="color:${color}">${c.label}</span>
+            <span class="text-gray-400 text-xs">f${c.start}–${c.end}</span>
+            ${hasVideo ? '<span class="text-gray-400 ml-0.5">▶</span>' : ''}
+          </div>`;
+        }
+        if (filtered.length > displayed.length)
+          html += `<span class="text-xs text-gray-400 self-center">… ${filtered.length - displayed.length} more</span>`;
+        html += `</div></div>`;
+      }
+    } else {
+      // ── Single-section (maneuver) ─────────────────────────────────────────
+      const filtered = _classFilter ? data.clips.filter(c => c.label === _classFilter) : data.clips;
+      currentVideoItems = filtered;
+      const displayed = _classN > 0 ? filtered.slice(0, _classN) : filtered;
+      const labelOptions = Object.keys(data.colors).sort();
+
+      html += `<div class="bg-white border border-gray-200 rounded-xl p-4 mb-4">`;
+      // N selector
+      html += `<div class="flex items-center gap-3 mb-3 flex-wrap">
+        <span class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Samples</span>
+        <select onchange="classChangeN(this.value)"
+          class="border border-gray-300 rounded-md px-2 py-1 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-400">
+          ${[10,20,50,100].map(v => `<option value="${v}"${_classN===v?' selected':''}>${v}</option>`).join('')}
+          <option value="0"${_classN===0?' selected':''}>All</option>
+        </select>
+        <span class="text-xs text-gray-400">${displayed.length} of ${filtered.length} shown${filtered.length < data.clips.length ? ' (filtered)' : ''}</span>
+      </div>`;
+      // Label filter chips
+      html += `<div class="flex flex-wrap gap-2">`;
+      const allActive = _classFilter === null;
+      html += `<button onclick="classFilter(null)"
+        class="px-2.5 py-1 rounded-full text-xs font-medium border transition ${
+          allActive ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-300 hover:border-blue-400 hover:text-blue-600'
+        }">All (${data.clips.length})</button>`;
+      for (const lbl of labelOptions) {
+        const cnt = data.clips.filter(c => c.label === lbl).length;
+        const color = data.colors[lbl] || '#6b7280';
+        const active = _classFilter === lbl;
+        const style = active ? `background:${color};border-color:${color};color:white;` : '';
+        const cls = active ? '' : 'bg-white text-gray-600 border-gray-300 hover:border-gray-400 hover:text-gray-700';
+        html += `<button onclick="classFilter('${lbl}')"
+          class="px-2.5 py-1 rounded-full text-xs font-medium border transition ${cls}" style="${style}">${lbl} (${cnt})</button>`;
+      }
+      html += `</div></div>`;
+
+      // Clip chips
+      html += `<div class="bg-white border border-gray-200 rounded-xl overflow-auto">
+        <div class="flex flex-wrap gap-2 p-4">`;
+      for (let i = 0; i < displayed.length; i++) {
+        const c = displayed[i];
+        const color = data.colors[c.label] || '#9ca3af';
+        const hasVideo = !!c.video_url;
+        const clickAttr = hasVideo ? `onclick="openVideoModalByIndex(${i})" style="cursor:pointer"` : '';
+        html += `<div class="flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 text-xs hover:border-gray-300 transition" ${clickAttr}>
+          <span class="w-2 h-2 rounded-full shrink-0" style="background:${color}"></span>
+          <span class="text-gray-700 font-medium">clip ${c.clip}</span>
+          <span class="font-semibold" style="color:${color}">${c.label}</span>
+          ${hasVideo ? '<span class="text-gray-400 ml-0.5">▶</span>' : ''}
+        </div>`;
+      }
+      if (filtered.length > displayed.length)
+        html += `<span class="text-xs text-gray-400 self-center">… ${filtered.length - displayed.length} more</span>`;
+      html += `</div></div>`;
+    }
+
+    sec.innerHTML = html;
+  }
+
   function showUnsupported(dataset, task) {
     const grid = document.getElementById('frame-grid');
     grid.innerHTML = `
@@ -847,8 +1248,16 @@
   document.getElementById('refresh-btn').addEventListener('click', () => {
     if (!selectedTask || !selectedDataset) return;
     const taskKey = `${selectedDataset}_${selectedTask}`;
-    const video = document.getElementById('video-select').value || null;
-    loadSamples(taskKey, video);
+    const entry = dashboardData.find(e => e.task_key === taskKey);
+    if (entry && entry.granularity === 'video') {
+      // Re-initialize group state on explicit reload
+      _skillGroupState = {};
+      _gestureGroupState = {};
+      loadVideoSummary(selectedTask, selectedDataset);
+    } else {
+      const video = document.getElementById('video-select').value || null;
+      loadSamples(taskKey, video);
+    }
   });
 
   document.getElementById('video-select').addEventListener('change', e => {
@@ -858,6 +1267,52 @@
     loadSamples(taskKey, e.target.value);
     pushState();
   });
+
+  // ── Video modal ──────────────────────────────────────────────────────────
+  function openVideoModalByIndex(index) {
+    const item = currentVideoItems[index];
+    if (!item || !item.video_url) return;
+    videoModalIndex = index;
+    const source = document.getElementById('video-modal-source');
+    const player = document.getElementById('video-modal-player');
+
+    // For gesture clips with a start frame, pass ss= to the transcode endpoint
+    // so ffmpeg starts from that offset (avoids transcoding the whole video)
+    let src = item.video_url;
+    if (item.start != null && src.startsWith('/transcode/')) {
+      src += `?ss=${(item.start / 25).toFixed(2)}`;
+    }
+    source.src = src;
+    player.load();
+
+    let caption = item.video || item.clip || '';
+    if (item.experience) caption += `  ·  ${item.experience}`;
+    if (item.category && !item.experience) caption += `  ·  ${item.category}`;
+    if (item.start != null) caption += `  ·  frames ${item.start}–${item.end}`;
+    if (item.label) caption += `  ·  ${item.label}`;
+    document.getElementById('video-modal-caption').textContent = caption;
+    const modal = document.getElementById('video-modal');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+  }
+
+  function navigateVideoModal(delta) {
+    if (videoModalIndex < 0 || currentVideoItems.length === 0) return;
+    let next = (videoModalIndex + delta + currentVideoItems.length) % currentVideoItems.length;
+    let attempts = 0;
+    while (!currentVideoItems[next]?.video_url && attempts < currentVideoItems.length) {
+      next = (next + delta + currentVideoItems.length) % currentVideoItems.length;
+      attempts++;
+    }
+    if (currentVideoItems[next]?.video_url) openVideoModalByIndex(next);
+  }
+
+  function closeVideoModal() {
+    document.getElementById('video-modal-player').pause();
+    const modal = document.getElementById('video-modal');
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+  }
 
   init();
 </script>
@@ -947,11 +1402,36 @@
   }
   document.addEventListener('keydown', e => {
     const lb = document.getElementById('lightbox');
-    if (lb.classList.contains('hidden')) return;
-    if (e.key === 'Escape') closeLightbox();
-    else if (e.key === 'ArrowRight') navigateLightbox(1);
-    else if (e.key === 'ArrowLeft')  navigateLightbox(-1);
+    const vm = document.getElementById('video-modal');
+    if (!lb.classList.contains('hidden')) {
+      if (e.key === 'Escape') closeLightbox();
+      else if (e.key === 'ArrowRight') navigateLightbox(1);
+      else if (e.key === 'ArrowLeft')  navigateLightbox(-1);
+    } else if (!vm.classList.contains('hidden')) {
+      if (e.key === 'Escape') closeVideoModal();
+      else if (e.key === 'ArrowRight') navigateVideoModal(1);
+      else if (e.key === 'ArrowLeft')  navigateVideoModal(-1);
+    }
   });
 </script>
+
+<!-- Video Modal -->
+<div id="video-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/80 backdrop-blur-sm"
+     onclick="closeVideoModal()">
+  <button class="absolute top-4 right-5 text-white text-3xl leading-none opacity-70 hover:opacity-100"
+          onclick="closeVideoModal()">&times;</button>
+  <button onclick="event.stopPropagation(); navigateVideoModal(-1)"
+    class="absolute left-4 top-1/2 -translate-y-1/2 text-white bg-black/40 hover:bg-black/70 rounded-full w-10 h-10 flex items-center justify-center text-xl transition">&#8592;</button>
+  <button onclick="event.stopPropagation(); navigateVideoModal(1)"
+    class="absolute right-4 top-1/2 -translate-y-1/2 text-white bg-black/40 hover:bg-black/70 rounded-full w-10 h-10 flex items-center justify-center text-xl transition">&#8594;</button>
+  <div class="flex flex-col items-center gap-3" onclick="event.stopPropagation()">
+    <video id="video-modal-player" controls
+           class="max-w-[85vw] max-h-[80vh] rounded-lg shadow-2xl bg-black">
+      <source id="video-modal-source" src="" type="video/mp4" />
+    </video>
+    <span id="video-modal-caption"
+          class="text-white text-sm bg-black/50 rounded-full px-4 py-1.5 max-w-2xl text-center"></span>
+  </div>
+</div>
 </body>
 </html>
