@@ -113,21 +113,27 @@ class Qwen2VLChat(Qwen2VLPromptMixin, BaseModel):
         max_gpu_mem = max(gpu_mems) if gpu_mems != [] else -1
         assert max_gpu_mem > 0
 
+        try:
+            import flash_attn  # noqa: F401
+            attn_impl = 'flash_attention_2'
+        except ImportError:
+            attn_impl = 'sdpa'
+
         # If only one process and GPU memory is less than 40GB
         if '72b' in self.model_path.lower():
             self.model = MODEL_CLS.from_pretrained(
-                model_path, torch_dtype='auto', device_map=split_model(), attn_implementation='flash_attention_2'
+                model_path, torch_dtype='auto', device_map=split_model(), attn_implementation=attn_impl
             )
             self.model.eval()
         elif auto_split_flag():
             assert world_size == 1, 'Only support world_size == 1 when AUTO_SPLIT is set for non-72B Qwen2-VL'
             # Will Use All GPUs to run one model
             self.model = MODEL_CLS.from_pretrained(
-                model_path, torch_dtype='auto', device_map='auto', attn_implementation='flash_attention_2'
+                model_path, torch_dtype='auto', device_map='auto', attn_implementation=attn_impl
             )
         else:
             self.model = MODEL_CLS.from_pretrained(
-                model_path, torch_dtype='auto', device_map='cpu', attn_implementation='flash_attention_2'
+                model_path, torch_dtype='auto', device_map='cpu', attn_implementation=attn_impl
             )
             self.model.cuda().eval()
 

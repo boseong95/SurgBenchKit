@@ -60,9 +60,11 @@ class ShellModel:
         self.eval_type = eval_type
         self.model = None
 
-surgical_models = {
-    'SurgVLP': partial(SurgVLPWrapper, model_path='surgvlp/surgvlp-surgeonet-7b'),
-}
+surgical_models = {}
+try:
+    surgical_models['SurgVLP'] = partial(SurgVLPWrapper, model_path='surgvlp/surgvlp-surgeonet-7b')
+except NameError:
+    pass
 
 video_models = {
     "Video-LLaVA-7B": partial(VideoLLaVA, model_path="LanguageBind/Video-LLaVA-7B"),
