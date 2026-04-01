@@ -52,6 +52,22 @@ def get_prompts(path, task, model):
         PROMPTS[('endoscapes_cvs_assessment', 'SurgVLP')] = ['2 tubular structures are connected to the gallbladder', 'A carefully dissected hepatocystic triangle is presenting an unimpeded view of only the 2 cystic structures and the cystic plate', 'The lower third of the gallbladder is dissected off the cystic plate.']
         PROMPTS[('endoscapes_cvs_assessment', 'paligemma-3b-mix-448')] = ["Answer en Is there a clear view of 2 tubular structures connected to the gallbladder?", "Answer en Is there a carefully dissected hepatocystic triangle presenting an unimpeded view of only the 2 cystic structures and the cystic plate?", "Answer en Is the lower third of the gallbladder dissected off the cystic plate?"]
 
+        # ENDOSCAPES OBJECT DETECTION (tool + anatomy)
+        endoscapes_det_categories = ['cystic_plate', 'calot_triangle', 'cystic_artery', 'cystic_duct', 'gallbladder', 'tool']
+
+        PROMPTS[('endoscapes_object_detection', 'GeminiPro1-5')] = 'Detect and localize all objects in this laparoscopic cholecystectomy image. ' \
+        'The possible object categories are: cystic_plate, calot_triangle, cystic_artery, cystic_duct, gallbladder, tool. ' \
+        'For each detected object, provide the bounding box as [x1, y1, x2, y2] coordinates (0-1000 normalized). ' \
+        'Use this JSON schema: {"category_name": [x1, y1, x2, y2]} for single instances, or {"category_name": [[x1,y1,x2,y2], [x1,y1,x2,y2]]} for multiple instances. ' \
+        'Only include categories that are visible. Avoid line breaks.'
+
+        PROMPTS[('endoscapes_object_detection', 'llava_next_vicuna_7b')] = PROMPTS[('endoscapes_object_detection', 'GeminiPro1-5')]
+
+        PROMPTS[('endoscapes_object_detection', 'paligemma-3b-mix-448')] = [
+            "detect cystic plate", "detect calot triangle", "detect cystic artery",
+            "detect cystic duct", "detect gallbladder", "detect tool"
+        ]
+
         PROMPTS[('endoscapes_cvs_assessment_threeshot', 'GeminiPro1-5')] = [path + '/train/10_17850.jpg',
                                                           'output: {"C1": true, "C2": false, "C3": false}',
                                                           path + '/train/22_41275.jpg',

@@ -8,7 +8,8 @@ from sharedeval.data.cholec_helpers import *
 
 import torch
 import os
-from difflib import get_close_matches 
+import re
+from difflib import get_close_matches
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
 
@@ -53,6 +54,8 @@ def infer_data(
         def eval_model(frame, prompt):
             return model.generate([frame, prompt])
 
+    is_detection = 'object_detection' in task['name']
+
     # as API calls often fail, we save all predictions as json files, and then read those in an eval loop
     for frame, label in tqdm(dataset):
         out_file = osp.join(write_dir, f'{"-".join(frame["path"].split("/")[-3:])}.json')
@@ -62,11 +65,25 @@ def infer_data(
             if osp.exists(out_file):
                 os.remove(out_file)
             try:
-                ret = eval_model(frame['path'], prompt) 
+                ret = eval_model(frame['path'], prompt)
                 if isinstance(ret, int):  # returns int if gemini blocks the request (e.g. image contains a lot of blood)
                     dump('Blocked: ' + str(ret), out_file)
                     continue
-                else: 
+
+                if is_detection:
+                    # For detection: save raw output + parsed bboxes with model-specific parsing
+                    from vlmeval.bbox_utils import get_bbox_parser, get_coord_range
+                    img_w, img_h = label['im_size_wh']
+                    parser = get_bbox_parser(model_name)
+                    parsed = parser(ret, img_w, img_h)
+                    # parsed is either a list of [x1,y1,x2,y2] or dict {cat: [[x1,y1,x2,y2],...]}
+                    pred = {
+                        'raw_output': ret,
+                        'parsed_bboxes': parsed,
+                        'coord_range': get_coord_range(model_name),
+                    }
+                    dump(pred, out_file)
+                else:
                     start_index = ret.find('{')
                     end_index = ret.rfind('}')  # Use rfind to get the last occurrence of '}'
 
@@ -299,15 +316,8 @@ def infer_data_paligemma(
     
 
     elif 'object_detection' in task['name']:
-        def process_object_detection(output):
-            import re
-            loc_values = re.findall(r'<loc(\d{4})>', output)
-            if len(loc_values) != 4:
-                return None
+        from vlmeval.bbox_utils import parse_bbox_paligemma
 
-            y0, x0, y1, x1 = map(int, loc_values)
-            return y0, x0, y1, x1
-        
         for frame, label in tqdm(dataset):
             out_file = osp.join(write_dir, f'{"-".join(frame["path"].split("/")[-3:])}.json')
             if osp.exists(out_file) and not kwargs['override_outputs']:
@@ -316,19 +326,25 @@ def infer_data_paligemma(
                 if osp.exists(out_file):
                     os.remove(out_file)
 
+                img_w, img_h = label['im_size_wh']
                 outputs = dict()
+                raw_outputs = dict()
                 for i, p in enumerate(prompt):
                     ret = eval_model(frame['path'], p)
-                    num_found_objs = len(ret.split(';'))
-                    for o, found_object in enumerate(ret.split(';')):
-                        output = process_object_detection(found_object)
-                        if output is None:
-                            continue
-                        if task.label_names[i] in ['tool', 'hand', 'forceps', 'needledriver', 'bovie']:  # endoscapes: only tool can have more than one instance. avos: all can be > 1
-                            outputs[task.label_names[i]+str(o+1)] = list(output)
-                        else:
-                            outputs[task.label_names[i]] = list(output)
-                dump(outputs, out_file)
+                    raw_outputs[task.label_names[i]] = ret
+                    bboxes = parse_bbox_paligemma(ret, img_w, img_h)
+                    cat_name = task.label_names[i]
+                    if len(bboxes) == 1:
+                        outputs[cat_name] = bboxes[0]
+                    elif len(bboxes) > 1:
+                        for o, bbox in enumerate(bboxes):
+                            outputs[cat_name + str(o + 1)] = bbox
+                pred = {
+                    'raw_output': raw_outputs,
+                    'parsed_bboxes': outputs,
+                    'coord_range': 1024,
+                }
+                dump(pred, out_file)
 
 
     elif 'phase' in task['name']:
@@ -868,81 +884,111 @@ def eval_data(
             label = all_files_labels[file]
             labels.append(label)
     
-    elif 'endoscapes_object_detection' in task['name']: # TODO is this needed?
+    elif 'endoscapes_object_detection' in task['name']:
         label_map_inverted = dataset.category_ids_to_name
         label_map = {v: k for k, v in label_map_inverted.items()}
-        labels_dict = {filename: label_array for filename, label_array in dataset.labels}
         cocoGt = COCO(osp.join(dataset.data_dir, dataset.split, 'annotation_coco.json'))
         image_ids_to_evaluate = []
         default = {}
         label_counts = {label: 0 for label in label_map.keys()}
         for file in all_files:
             if file not in evaluation_files:
-                pred = default
+                pred_data = default
             else:
                 with open(file, 'r') as f:
-                    pred = json.load(f)
-                if "Blocked" in pred or "Exception" in pred:
-                    pred = default
+                    pred_data = json.load(f)
+                if isinstance(pred_data, str) and ("Blocked" in pred_data or "Exception" in pred_data):
+                    pred_data = default
                 else:
                     successful_preds += 1
+
             folder = file.split('/')[-1].split('-')[2].split('_')[0]
             frame = file.split('/')[-1].split('_')[1].split('.')[0] + '.jpg'
-            label = all_files_labels[file] # labels_dict[osp.join(dataset.data_dir, dataset.split, folder + '_' + frame)]
-            image_id =  dataset.file_names_to_id[folder + '_' + frame]
+            label = all_files_labels[file]
+            image_id = dataset.file_names_to_id[folder + '_' + frame]
             image_ids_to_evaluate.append(image_id)
-            # add to label_counts
-            for category_name in label.keys():
-                if not category_name in label_map:
-                    continue
-                label_counts[category_name] += len(label[category_name])
 
-            for category_name in pred.keys():
-                if len(pred[category_name]) == 4:
-                    y0, x0, y1, x1 = pred[category_name]
-                else:
-                    continue
-                if 'gemini' in model_name:
-                    x0 *= label['im_size_wh'][0] / 1000  #TODO this is for Gemini. Check how other models handle this
-                    x1 *= label['im_size_wh'][0] / 1000
-                    y0 *= label['im_size_wh'][1] / 1000
-                    y1 *= label['im_size_wh'][1] / 1000
-                elif 'paligemma' in model_name: # paligemma assumes coodinates for 1024 X 1024 images. endoscapes images are 854 x 480
-                    x0 *= 854 / 1024
-                    x1 *= 854 / 1024
-                    y0 *= 480 / 1024
-                    y1 *= 480 / 1024
-                width = x1 - x0
-                height = y1 - y0
-                if not category_name.replace(' ','_') in label_map:
-                    continue
-                if not 'tool' in category_name:
-                    category_id = label_map[category_name.replace('cyctic', 'cystic').replace(' ', '_')]
-                    coco_format = {"image_id": image_id, "category_id": category_id, "bbox": [x0, y0, width, height], "score": 1.0}
-                else:
-                    coco_format = {"image_id": image_id, "category_id": label_map['tool'], "bbox": [x0, y0, width, height], "score": 1.0}
-                preds.append(coco_format)
+            # Count GT labels
+            for category_name in label.keys():
+                if category_name in label_map:
+                    label_counts[category_name] += len(label[category_name])
+
+            # Extract parsed bboxes (already in pixel coordinates from inference)
+            if isinstance(pred_data, dict) and 'parsed_bboxes' in pred_data:
+                parsed = pred_data['parsed_bboxes']
+            else:
+                parsed = pred_data  # legacy format
+
+            # Convert parsed bboxes to COCO format
+            if isinstance(parsed, dict):
+                for category_name, bbox_or_bboxes in parsed.items():
+                    if category_name in ('raw_output', 'coord_range', 'im_size_wh'):
+                        continue
+                    # Normalize category name
+                    cat_clean = category_name.lower().replace(' ', '_').replace('cyctic', 'cystic')
+                    # Strip trailing digits for multi-instance keys like "tool1", "tool2"
+                    cat_base = re.sub(r'\d+$', '', cat_clean)
+                    if cat_base not in label_map:
+                        # Try close match
+                        matches = get_close_matches(cat_base, label_map.keys(), n=1, cutoff=0.6)
+                        if matches:
+                            cat_base = matches[0]
+                        else:
+                            continue
+                    category_id = label_map[cat_base]
+
+                    # Handle single box [x1,y1,x2,y2] or list of boxes [[x1,y1,x2,y2],...]
+                    if isinstance(bbox_or_bboxes, list) and len(bbox_or_bboxes) == 4 and all(isinstance(c, (int, float)) for c in bbox_or_bboxes):
+                        bboxes = [bbox_or_bboxes]
+                    elif isinstance(bbox_or_bboxes, list) and all(isinstance(b, list) for b in bbox_or_bboxes):
+                        bboxes = bbox_or_bboxes
+                    else:
+                        continue
+
+                    for bbox in bboxes:
+                        if len(bbox) != 4:
+                            continue
+                        x1, y1, x2, y2 = bbox
+                        width = x2 - x1
+                        height = y2 - y1
+                        if width <= 0 or height <= 0:
+                            continue
+                        coco_format = {"image_id": image_id, "category_id": category_id,
+                                       "bbox": [x1, y1, width, height], "score": 1.0}
+                        preds.append(coco_format)
+
+        print(f'Detection eval: {successful_preds} successful predictions, {len(preds)} COCO-format detections')
         dump(preds, osp.join(read_dir, 'results.json'))
-        cocoDt = cocoGt.loadRes(osp.join(read_dir, 'results.json'))
         image_ids_to_evaluate = list(set(image_ids_to_evaluate))
-        cocoEval = COCOeval(cocoGt, cocoDt, 'bbox')
-        cocoEval.params.imgIds = image_ids_to_evaluate
         results = []
-        if dataset.category == 'all':
+
+        if len(preds) == 0:
+            # No valid predictions — output NaN for all categories
+            print('WARNING: No valid bbox predictions. Outputting NaN for all metrics.')
+            for category_id, category_name in dataset.category_ids_to_name.items():
+                results.append({
+                    'Class': category_name,
+                    'AP@0.50:0.95': float('nan'),
+                    'AP@0.50': float('nan'),
+                    'AP@0.75': float('nan'),
+                    'AR@1': float('nan'),
+                    'AR@10': float('nan'),
+                })
+        elif dataset.category == 'all':
+            cocoDt = cocoGt.loadRes(osp.join(read_dir, 'results.json'))
+            cocoEval = COCOeval(cocoGt, cocoDt, 'bbox')
+            cocoEval.params.imgIds = image_ids_to_evaluate
             for category_id, category_name in dataset.category_ids_to_name.items():
                 print('#####################################   Evaluating category:', category_name)
                 cocoEval.params.catIds = [category_id]
                 cocoEval.evaluate()
                 cocoEval.accumulate()
                 cocoEval.summarize()
-                # Extracting metrics
-                AP_50_95_all = cocoEval.stats[0]  # AP@0.50:0.95 for area=all
-                AP_50_all = cocoEval.stats[1]     # AP@0.50 for area=all
-                AP_75_all = cocoEval.stats[2]     # AP@0.75 for area=all
-                AR_1_all = cocoEval.stats[6]      # AR@1 for area=all
-                AR_10_all = cocoEval.stats[7]     # AR@10 for area=all
-                
-                # Storing results for the category
+                AP_50_95_all = cocoEval.stats[0]
+                AP_50_all = cocoEval.stats[1]
+                AP_75_all = cocoEval.stats[2]
+                AR_1_all = cocoEval.stats[6]
+                AR_10_all = cocoEval.stats[7]
                 results.append({
                     'Class': category_name,
                     'AP@0.50:0.95': AP_50_95_all,
@@ -951,6 +997,7 @@ def eval_data(
                     'AR@1': AR_1_all,
                     'AR@10': AR_10_all,
                 })
+
         df = pd.DataFrame(results)
 
         # Separate "tool" and "anatomies"
