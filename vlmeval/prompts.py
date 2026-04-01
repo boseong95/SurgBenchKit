@@ -36,7 +36,7 @@ def get_prompts(path, task, model):
         - C2: A carefully dissected hepatocystic triangle presenting an unimpeded view of only the 2 cystic structures and the cystic plate. \
         - C3: The lower third of the gallbladder is dissected off the cystic plate. \
         Instructions: Assess the image carefully, and answer which of the Critical View of Safety (CVS) criteria are met. \
-        Use this JSON schema: {"criterion": bool} and avoid line breaks.'
+        Use this JSON schema: {"C1": bool, "C2": bool, "C3": bool} and avoid line breaks.'
 
         PROMPTS[('endoscapes_cvs_assessment', 'GPT4o')] = 'You are a helpful medical video assistant. \
         Task: Assess whether Critical View of Safety (CVS) is fully achieved in the provided frames from a cholecystectomy video. The Critical View of Safety (CVS) is fully achieved if the following three criteria are met: \
@@ -137,6 +137,7 @@ def get_prompts(path, task, model):
         0: Preparation, 1: Calot Triangle Dissection, 2: Clipping Cutting, 3: Gallbladder Dissection, \
         4: Gallbladder Packaging, 5: Cleaning Coagulation, 6: Gallbladder Retraction. There are no other options. Use this JSON schema: {"phase": int} and avoid line breaks. '
         PROMPTS[('heichole_phase_recognition', 'GeminiPro1-5')] = PROMPTS[('cholec80_phase_recognition', 'GeminiPro1-5')]
+        PROMPTS[('cholec80_phase_recognition', 'llava_next_vicuna_7b')] = PROMPTS[('cholec80_phase_recognition', 'GeminiPro1-5')]
 
         PROMPTS[('heichole_phase_recognition_oneshot', 'GeminiPro1-5')] =[
         path + '/Hei-Chole11/frame_00000.png',  # train split [12, 11, 24]
@@ -242,112 +243,113 @@ def get_prompts(path, task, model):
         PROMPTS[('cholec80_tool_recognition', 'GeminiPro1-5')] = 'Which of these tools is present in the image: Grasper, Bipolar, Hook, Scissors, Clipper, \
         Irrigator, SpecimenBag?\
         Respond with a 0 or 1 for all tools according to whether or not the tool is present. \
-        Use this JSON schema: {"tool_name": bool} and avoid line breaks.'
+        Use this JSON schema: {"Grasper": bool, "Bipolar": bool, "Hook": bool, "Scissors": bool, "Clipper": bool, "Irrigator": bool, "SpecimenBag": bool} and avoid line breaks.'
+        PROMPTS[('cholec80_tool_recognition', 'llava_next_vicuna_7b')] = PROMPTS[('cholec80_tool_recognition', 'GeminiPro1-5')]
 
 
         # Heichole Tool
-        PROMPTS[('heichole_tool_recognition', 'GeminiPro1-5')] = 'Which of these tools is present in the image: Grasper, Clipper, Coagulation instruments, Scissors, Suction-irrigation, Specimen bag, Stapler? \
+        PROMPTS[('heichole_tool_recognition', 'GeminiPro1-5')] = 'Which of these tools is present in the image: Grasper, Bipolar Forceps, Hook, Scissors, Clipper, Irrigator, Specimen Bag? \
         Respond with a 0 or 1 for all tools according to whether or not the tool is present. \
         Use this JSON schema: {"tool_name": bool} and avoid line breaks.'
 
 
-        heichole_tools = ['a grasper', 'a clipper', 'coagulation instruments', 'scissors', 'suction-irrigation', 'a specimen bag', 'a stapler']
+        heichole_tools = ['a grasper', 'bipolar forceps', 'a hook', 'scissors', 'a clipper', 'an irrigator', 'a specimen bag']
         candidate_captions_positive = ["A surgical scene containing %s." % cls for cls in heichole_tools]
         PROMPTS[('heichole_tool_recognition', 'CLIP')] =  candidate_captions_positive 
 
         PROMPTS[('heichole_tool_recognition', 'SurgVLP')] = ['I use grasper or cautery forcep to grasp it',
-                                                    'I use clipper to clip it',
                                                     'I use bipolar to coagulate and clean the bleeding',
+                                                    'I use hook to dissect tissue',
                                                     'I use scissor',
+                                                    'I use clipper to clip it',
                                                     'I use irrigator to suck it',
-                                                    'I use specimenbag to wrap it',
-                                                    'I use stapler to staple it']
+                                                    'I use specimenbag to wrap it']
         
-        PROMPTS[('heichole_tool_recognition', 'paligemma-3b-mix-448')] = ["Answer en Is there a grasper in this image?", "Answer en Is there a clipper in this image?", "Answer en Is there a coagulation instrument in this image?", "Answer en Are there scissors in this image?", "Answer en Is there a suction-irrigation instrument in this image?", "Answer en Is there a specimen bag in this image?", "Answer en Is there a stapler in this image?"]
+        PROMPTS[('heichole_tool_recognition', 'paligemma-3b-mix-448')] = ["Answer en Is there a grasper in this image?", "Answer en Is there a bipolar forceps in this image?", "Answer en Is there a hook in this image?", "Answer en Are there scissors in this image?", "Answer en Is there a clipper in this image?", "Answer en Is there an irrigator in this image?", "Answer en Is there a specimen bag in this image?"]
 
 
         PROMPTS[('heichole_tool_recognition_oneshot', 'GeminiPro1-5')] = [
         path + '/Hei-Chole12/frame_09234.png', 
-        'output: {"Grasper": false, "Clipper": true, "Coagulation instruments": false, "Scissors": false, "Suction-irrigation": false, "Specimen bag": false, "Stapler": false}', 
+        'output: {"Grasper": false, "Bipolar Forceps": false, "Hook": 0, "Scissors": false, "Clipper": true, "Irrigator": false, "Specimen Bag": false}', 
         path + '/Hei-Chole11/frame_08049.png', 
-        'output: {"Grasper": false, "Clipper": false, "Coagulation instruments": true, "Scissors": false, "Suction-irrigation": false, "Specimen bag": false, "Stapler": false}',
+        'output: {"Grasper": false, "Bipolar Forceps": true, "Hook": 0, "Scissors": false, "Clipper": false, "Irrigator": false, "Specimen Bag": false}',
         path + '/Hei-Chole11/frame_10931.png', 
-        'output: {"Grasper": false, "Clipper": false, "Coagulation instruments": false, "Scissors": true, "Suction-irrigation": false, "Specimen bag": false, "Stapler": false}', 
+        'output: {"Grasper": false, "Bipolar Forceps": false, "Hook": 0, "Scissors": true, "Clipper": false, "Irrigator": false, "Specimen Bag": false}', 
         path + '/Hei-Chole11/frame_21704.png', 
-        'output: {"Grasper": true, "Clipper": false, "Coagulation instruments": false, "Scissors": false, "Suction-irrigation": true, "Specimen bag": false, "Stapler": false}', 
+        'output: {"Grasper": true, "Bipolar Forceps": false, "Hook": 0, "Scissors": false, "Clipper": false, "Irrigator": true, "Specimen Bag": false}', 
         path + '/Hei-Chole11/frame_31351.png', 
-        'output: {"Grasper": false, "Clipper": false, "Coagulation instruments": false, "Scissors": false, "Suction-irrigation": false, "Specimen bag": true, "Stapler": false}', 
+        'output: {"Grasper": false, "Bipolar Forceps": false, "Hook": 0, "Scissors": false, "Clipper": false, "Irrigator": false, "Specimen Bag": true}', 
         path + '/Hei-Chole24/frame_95118.png', 
-        'output: {"Grasper": false, "Clipper": false, "Coagulation instruments": false, "Scissors": false, "Suction-irrigation": false, "Specimen bag": false, "Stapler": true}', 
+        'output: {"Grasper": false, "Bipolar Forceps": false, "Hook": 0, "Scissors": false, "Clipper": false, "Irrigator": false, "Specimen Bag": false}', 
         path + '/Hei-Chole12/frame_00003.png', 
-        'output: {"Grasper": false, "Clipper": false, "Coagulation instruments": false, "Scissors": false, "Suction-irrigation": false, "Specimen bag": false, "Stapler": false}', 
-        'You just saw some images of a laparoscopic cholecystectomy with corresponding tool annotations. In the next image, assess which of these tools is present: Grasper, Clipper, Coagulation instruments, Scissors, Suction-irrigation, Specimen bag, Stapler. \
+        'output: {"Grasper": false, "Bipolar Forceps": false, "Hook": 0, "Scissors": false, "Clipper": false, "Irrigator": false, "Specimen Bag": false}', 
+        'You just saw some images of a laparoscopic cholecystectomy with corresponding tool annotations. In the next image, assess which of these tools is present: Grasper, Bipolar Forceps, Hook, Scissors, Clipper, Irrigator, Specimen Bag. \
         Respond with a 0 or 1 for all tools according to whether or not the tool is present. \
         Use this JSON schema: {"tool_name": bool} and avoid line breaks.']
 
         PROMPTS[('heichole_tool_recognition_threeshot', 'GeminiPro1-5')] = [
-                path + '/Hei-Chole24/frame_74625.png', 'output: {"Grasper": 1, "Clipper": 0, "Coagulation instruments": 1, "Scissors": 0, "Suction-irrigation": 0, "Specimen bag": 0, "Stapler": 0}', 
-                path + '/Hei-Chole24/frame_12375.png', 'output: {"Grasper": 1, "Clipper": 0, "Coagulation instruments": 1, "Scissors": 0, "Suction-irrigation": 0, "Specimen bag": 0, "Stapler": 0}',
-                  path + '/Hei-Chole24/frame_11625.png', 'output: {"Grasper": 1, "Clipper": 0, "Coagulation instruments": 0, "Scissors": 0, "Suction-irrigation": 0, "Specimen bag": 0, "Stapler": 0}', 
-                  path + '/Hei-Chole12/frame_12000.png', 'output: {"Grasper": 0, "Clipper": 0, "Coagulation instruments": 1, "Scissors": 0, "Suction-irrigation": 0, "Specimen bag": 0, "Stapler": 0}', 
-                  path + '/Hei-Chole12/frame_40500.png', 'output: {"Grasper": 1, "Clipper": 0, "Coagulation instruments": 0, "Scissors": 0, "Suction-irrigation": 1, "Specimen bag": 0, "Stapler": 0}', 
-                  path + '/Hei-Chole24/frame_48375.png', 'output: {"Grasper": 1, "Clipper": 0, "Coagulation instruments": 0, "Scissors": 0, "Suction-irrigation": 1, "Specimen bag": 0, "Stapler": 0}', 
-                  path + '/Hei-Chole24/frame_109125.png', 'output: {"Grasper": 1, "Clipper": 0, "Coagulation instruments": 0, "Scissors": 0, "Suction-irrigation": 1, "Specimen bag": 1, "Stapler": 0}', 
-                  path + '/Hei-Chole12/frame_42750.png', 'output: {"Grasper": 0, "Clipper": 0, "Coagulation instruments": 0, "Scissors": 0, "Suction-irrigation": 0, "Specimen bag": 1, "Stapler": 0}', 
-                  path + '/Hei-Chole24/frame_96000.png', 'output: {"Grasper": 0, "Clipper": 0, "Coagulation instruments": 0, "Scissors": 0, "Suction-irrigation": 0, "Specimen bag": 0, "Stapler": 1}', 
-                  path + '/Hei-Chole12/frame_43125.png', 'output: {"Grasper": 1, "Clipper": 0, "Coagulation instruments": 0, "Scissors": 0, "Suction-irrigation": 0, "Specimen bag": 1, "Stapler": 0}', 
-                  path + '/Hei-Chole24/frame_100500.png', 'output: {"Grasper": 1, "Clipper": 1, "Coagulation instruments": 0, "Scissors": 0, "Suction-irrigation": 0, "Specimen bag": 0, "Stapler": 0}', 
-                  path + '/Hei-Chole24/frame_102375.png', 'output: {"Grasper": 1, "Clipper": 1, "Coagulation instruments": 0, "Scissors": 0, "Suction-irrigation": 0, "Specimen bag": 0, "Stapler": 0}', 
-                  path + '/Hei-Chole12/frame_09375.png', 'output: {"Grasper": 0, "Clipper": 1, "Coagulation instruments": 0, "Scissors": 0, "Suction-irrigation": 0, "Specimen bag": 0, "Stapler": 0}', 
-                  path + '/Hei-Chole24/frame_95625.png', 'output: {"Grasper": 0, "Clipper": 0, "Coagulation instruments": 0, "Scissors": 0, "Suction-irrigation": 0, "Specimen bag": 0, "Stapler": 1}', 
-                  path + '/Hei-Chole11/frame_14625.png', 'output: {"Grasper": 0, "Clipper": 0, "Coagulation instruments": 0, "Scissors": 1, "Suction-irrigation": 0, "Specimen bag": 0, "Stapler": 0}', 
-                  path + '/Hei-Chole24/frame_67875.png', 'output: {"Grasper": 1, "Clipper": 0, "Coagulation instruments": 1, "Scissors": 0, "Suction-irrigation": 0, "Specimen bag": 0, "Stapler": 0}', 
-                  path + '/Hei-Chole24/frame_97500.png', 'output: {"Grasper": 0, "Clipper": 0, "Coagulation instruments": 0, "Scissors": 0, "Suction-irrigation": 0, "Specimen bag": 0, "Stapler": 1}', 
-                  path + '/Hei-Chole12/frame_10500.png', 'output: {"Grasper": 1, "Clipper": 0, "Coagulation instruments": 0, "Scissors": 1, "Suction-irrigation": 0, "Specimen bag": 0, "Stapler": 0}', 
-                  path + '/Hei-Chole24/frame_93000.png', 'output: {"Grasper": 1, "Clipper": 0, "Coagulation instruments": 0, "Scissors": 0, "Suction-irrigation": 0, "Specimen bag": 0, "Stapler": 0}', 
-                  path + '/Hei-Chole12/frame_25875.png', 'output: {"Grasper": 0, "Clipper": 0, "Coagulation instruments": 0, "Scissors": 1, "Suction-irrigation": 0, "Specimen bag": 0, "Stapler": 0}', 
-                  path + '/Hei-Chole24/frame_74250.png', 'output: {"Grasper": 1, "Clipper": 0, "Coagulation instruments": 1, "Scissors": 0, "Suction-irrigation": 0, "Specimen bag": 0, "Stapler": 0}',
-                'You just saw some images of a laparoscopic cholecystectomy with corresponding tool annotations. In the next image, assess which of these tools is present: Grasper, Clipper, Coagulation instruments, Scissors, Suction-irrigation, Specimen bag, Stapler. \
+                path + '/Hei-Chole24/frame_74625.png', 'output: {"Grasper": 1, "Bipolar Forceps": 1, "Hook": 0, "Scissors": 0, "Clipper": 0, "Irrigator": 0, "Specimen Bag": 0}', 
+                path + '/Hei-Chole24/frame_12375.png', 'output: {"Grasper": 1, "Bipolar Forceps": 1, "Hook": 0, "Scissors": 0, "Clipper": 0, "Irrigator": 0, "Specimen Bag": 0}',
+                  path + '/Hei-Chole24/frame_11625.png', 'output: {"Grasper": 1, "Bipolar Forceps": 0, "Hook": 0, "Scissors": 0, "Clipper": 0, "Irrigator": 0, "Specimen Bag": 0}', 
+                  path + '/Hei-Chole12/frame_12000.png', 'output: {"Grasper": 0, "Bipolar Forceps": 1, "Hook": 0, "Scissors": 0, "Clipper": 0, "Irrigator": 0, "Specimen Bag": 0}', 
+                  path + '/Hei-Chole12/frame_40500.png', 'output: {"Grasper": 1, "Bipolar Forceps": 0, "Hook": 0, "Scissors": 0, "Clipper": 0, "Irrigator": 1, "Specimen Bag": 0}', 
+                  path + '/Hei-Chole24/frame_48375.png', 'output: {"Grasper": 1, "Bipolar Forceps": 0, "Hook": 0, "Scissors": 0, "Clipper": 0, "Irrigator": 1, "Specimen Bag": 0}', 
+                  path + '/Hei-Chole24/frame_109125.png', 'output: {"Grasper": 1, "Bipolar Forceps": 0, "Hook": 0, "Scissors": 0, "Clipper": 0, "Irrigator": 1, "Specimen Bag": 1}', 
+                  path + '/Hei-Chole12/frame_42750.png', 'output: {"Grasper": 0, "Bipolar Forceps": 0, "Hook": 0, "Scissors": 0, "Clipper": 0, "Irrigator": 0, "Specimen Bag": 1}', 
+                  path + '/Hei-Chole24/frame_96000.png', 'output: {"Grasper": 0, "Bipolar Forceps": 0, "Hook": 0, "Scissors": 0, "Clipper": 0, "Irrigator": 0, "Specimen Bag": 0}', 
+                  path + '/Hei-Chole12/frame_43125.png', 'output: {"Grasper": 1, "Bipolar Forceps": 0, "Hook": 0, "Scissors": 0, "Clipper": 0, "Irrigator": 0, "Specimen Bag": 1}', 
+                  path + '/Hei-Chole24/frame_100500.png', 'output: {"Grasper": 1, "Bipolar Forceps": 0, "Hook": 0, "Scissors": 0, "Clipper": 1, "Irrigator": 0, "Specimen Bag": 0}', 
+                  path + '/Hei-Chole24/frame_102375.png', 'output: {"Grasper": 1, "Bipolar Forceps": 0, "Hook": 0, "Scissors": 0, "Clipper": 1, "Irrigator": 0, "Specimen Bag": 0}', 
+                  path + '/Hei-Chole12/frame_09375.png', 'output: {"Grasper": 0, "Bipolar Forceps": 0, "Hook": 0, "Scissors": 0, "Clipper": 1, "Irrigator": 0, "Specimen Bag": 0}', 
+                  path + '/Hei-Chole24/frame_95625.png', 'output: {"Grasper": 0, "Bipolar Forceps": 0, "Hook": 0, "Scissors": 0, "Clipper": 0, "Irrigator": 0, "Specimen Bag": 0}', 
+                  path + '/Hei-Chole11/frame_14625.png', 'output: {"Grasper": 0, "Bipolar Forceps": 0, "Hook": 0, "Scissors": 1, "Clipper": 0, "Irrigator": 0, "Specimen Bag": 0}', 
+                  path + '/Hei-Chole24/frame_67875.png', 'output: {"Grasper": 1, "Bipolar Forceps": 1, "Hook": 0, "Scissors": 0, "Clipper": 0, "Irrigator": 0, "Specimen Bag": 0}', 
+                  path + '/Hei-Chole24/frame_97500.png', 'output: {"Grasper": 0, "Bipolar Forceps": 0, "Hook": 0, "Scissors": 0, "Clipper": 0, "Irrigator": 0, "Specimen Bag": 0}', 
+                  path + '/Hei-Chole12/frame_10500.png', 'output: {"Grasper": 1, "Bipolar Forceps": 0, "Hook": 0, "Scissors": 1, "Clipper": 0, "Irrigator": 0, "Specimen Bag": 0}', 
+                  path + '/Hei-Chole24/frame_93000.png', 'output: {"Grasper": 1, "Bipolar Forceps": 0, "Hook": 0, "Scissors": 0, "Clipper": 0, "Irrigator": 0, "Specimen Bag": 0}', 
+                  path + '/Hei-Chole12/frame_25875.png', 'output: {"Grasper": 0, "Bipolar Forceps": 0, "Hook": 0, "Scissors": 1, "Clipper": 0, "Irrigator": 0, "Specimen Bag": 0}', 
+                  path + '/Hei-Chole24/frame_74250.png', 'output: {"Grasper": 1, "Bipolar Forceps": 1, "Hook": 0, "Scissors": 0, "Clipper": 0, "Irrigator": 0, "Specimen Bag": 0}',
+                'You just saw some images of a laparoscopic cholecystectomy with corresponding tool annotations. In the next image, assess which of these tools is present: Grasper, Bipolar Forceps, Hook, Scissors, Clipper, Irrigator, Specimen Bag. \
                 Respond with a 0 or 1 for all tools according to whether or not the tool is present. \
                 Use this JSON schema: {"tool_name": bool} and avoid line breaks.']
 
         PROMPTS[('heichole_tool_recognition_fiveshot', 'GeminiPro1-5')] = [
-                path + '/Hei-Chole24/frame_48750.png', 'output: {"Grasper": 1, "Clipper": 0, "Coagulation instruments": 0, "Scissors": 0, "Suction-irrigation": 1, "Specimen bag": 0, "Stapler": 0}', 
-                path + '/Hei-Chole11/frame_07125.png', 'output: {"Grasper": 1, "Clipper": 0, "Coagulation instruments": 1, "Scissors": 0, "Suction-irrigation": 0, "Specimen bag": 0, "Stapler": 0}', 
-                path + '/Hei-Chole24/frame_45000.png', 'output: {"Grasper": 1, "Clipper": 0, "Coagulation instruments": 1, "Scissors": 0, "Suction-irrigation": 0, "Specimen bag": 0, "Stapler": 0}', 
-                path + '/Hei-Chole24/frame_77625.png', 'output: {"Grasper": 1, "Clipper": 0, "Coagulation instruments": 0, "Scissors": 0, "Suction-irrigation": 0, "Specimen bag": 0, "Stapler": 0}', 
-                path + '/Hei-Chole12/frame_37125.png', 'output: {"Grasper": 1, "Clipper": 0, "Coagulation instruments": 1, "Scissors": 0, "Suction-irrigation": 0, "Specimen bag": 0, "Stapler": 0}', 
-                path + '/Hei-Chole24/frame_76500.png', 'output: {"Grasper": 1, "Clipper": 1, "Coagulation instruments": 0, "Scissors": 0, "Suction-irrigation": 0, "Specimen bag": 0, "Stapler": 0}', 
-                path + '/Hei-Chole24/frame_49500.png', 'output: {"Grasper": 1, "Clipper": 0, "Coagulation instruments": 0, "Scissors": 0, "Suction-irrigation": 1, "Specimen bag": 0, "Stapler": 0}', 
-                path + '/Hei-Chole12/frame_42375.png', 'output: {"Grasper": 0, "Clipper": 0, "Coagulation instruments": 0, "Scissors": 0, "Suction-irrigation": 0, "Specimen bag": 1, "Stapler": 0}', 
-                path + '/Hei-Chole12/frame_35250.png', 'output: {"Grasper": 1, "Clipper": 0, "Coagulation instruments": 0, "Scissors": 0, "Suction-irrigation": 0, "Specimen bag": 1, "Stapler": 0}', 
-                path + '/Hei-Chole11/frame_18750.png', 'output: {"Grasper": 0, "Clipper": 0, "Coagulation instruments": 1, "Scissors": 0, "Suction-irrigation": 0, "Specimen bag": 0, "Stapler": 0}', 
-                path + '/Hei-Chole24/frame_110250.png', 'output: {"Grasper": 1, "Clipper": 0, "Coagulation instruments": 0, "Scissors": 0, "Suction-irrigation": 1, "Specimen bag": 1, "Stapler": 0}', 
-                path + '/Hei-Chole24/frame_46125.png', 'output: {"Grasper": 1, "Clipper": 0, "Coagulation instruments": 1, "Scissors": 0, "Suction-irrigation": 0, "Specimen bag": 0, "Stapler": 0}', 
-                path + '/Hei-Chole11/frame_09375.png', 'output: {"Grasper": 0, "Clipper": 1, "Coagulation instruments": 0, "Scissors": 0, "Suction-irrigation": 0, "Specimen bag": 0, "Stapler": 0}', 
-                path + '/Hei-Chole12/frame_40875.png', 'output: {"Grasper": 1, "Clipper": 0, "Coagulation instruments": 0, "Scissors": 0, "Suction-irrigation": 1, "Specimen bag": 0, "Stapler": 0}', 
-                path + '/Hei-Chole24/frame_102375.png', 'output: {"Grasper": 1, "Clipper": 1, "Coagulation instruments": 0, "Scissors": 0, "Suction-irrigation": 0, "Specimen bag": 0, "Stapler": 0}', 
-                path + '/Hei-Chole24/frame_107625.png', 'output: {"Grasper": 1, "Clipper": 0, "Coagulation instruments": 0, "Scissors": 0, "Suction-irrigation": 0, "Specimen bag": 1, "Stapler": 0}', 
-                path + '/Hei-Chole24/frame_124500.png', 'output: {"Grasper": 0, "Clipper": 0, "Coagulation instruments": 0, "Scissors": 0, "Suction-irrigation": 0, "Specimen bag": 1, "Stapler": 0}', 
-                path + '/Hei-Chole11/frame_14625.png', 'output: {"Grasper": 0, "Clipper": 0, "Coagulation instruments": 0, "Scissors": 1, "Suction-irrigation": 0, "Specimen bag": 0, "Stapler": 0}', 
-                path + '/Hei-Chole12/frame_41625.png', 'output: {"Grasper": 1, "Clipper": 0, "Coagulation instruments": 0, "Scissors": 0, "Suction-irrigation": 1, "Specimen bag": 0, "Stapler": 0}', 
-                path + '/Hei-Chole12/frame_22500.png', 'output: {"Grasper": 1, "Clipper": 1, "Coagulation instruments": 0, "Scissors": 0, "Suction-irrigation": 0, "Specimen bag": 0, "Stapler": 0}', 
-                path + '/Hei-Chole24/frame_67875.png', 'output: {"Grasper": 1, "Clipper": 0, "Coagulation instruments": 1, "Scissors": 0, "Suction-irrigation": 0, "Specimen bag": 0, "Stapler": 0}', 
-                path + '/Hei-Chole12/frame_09000.png', 'output: {"Grasper": 0, "Clipper": 1, "Coagulation instruments": 0, "Scissors": 0, "Suction-irrigation": 0, "Specimen bag": 0, "Stapler": 0}', 
-                path + '/Hei-Chole24/frame_92625.png', 'output: {"Grasper": 1, "Clipper": 0, "Coagulation instruments": 0, "Scissors": 0, "Suction-irrigation": 0, "Specimen bag": 0, "Stapler": 0}', 
-                path + '/Hei-Chole24/frame_96000.png', 'output: {"Grasper": 0, "Clipper": 0, "Coagulation instruments": 0, "Scissors": 0, "Suction-irrigation": 0, "Specimen bag": 0, "Stapler": 1}', 
-                path + '/Hei-Chole11/frame_10875.png', 'output: {"Grasper": 0, "Clipper": 0, "Coagulation instruments": 0, "Scissors": 1, "Suction-irrigation": 0, "Specimen bag": 0, "Stapler": 0}', 
-                path + '/Hei-Chole24/frame_96750.png', 'output: {"Grasper": 0, "Clipper": 0, "Coagulation instruments": 0, "Scissors": 0, "Suction-irrigation": 0, "Specimen bag": 0, "Stapler": 1}', 
-                path + '/Hei-Chole12/frame_25875.png', 'output: {"Grasper": 0, "Clipper": 0, "Coagulation instruments": 0, "Scissors": 1, "Suction-irrigation": 0, "Specimen bag": 0, "Stapler": 0}', 
-                path + '/Hei-Chole12/frame_10125.png', 'output: {"Grasper": 0, "Clipper": 0, "Coagulation instruments": 0, "Scissors": 1, "Suction-irrigation": 0, "Specimen bag": 0, "Stapler": 0}', 
-                path + '/Hei-Chole24/frame_93000.png', 'output: {"Grasper": 1, "Clipper": 0, "Coagulation instruments": 0, "Scissors": 0, "Suction-irrigation": 0, "Specimen bag": 0, "Stapler": 0}', 
-                path + '/Hei-Chole24/frame_95250.png', 'output: {"Grasper": 1, "Clipper": 0, "Coagulation instruments": 0, "Scissors": 0, "Suction-irrigation": 0, "Specimen bag": 0, "Stapler": 1}', 
-                path + '/Hei-Chole24/frame_92250.png', 'output: {"Grasper": 1, "Clipper": 0, "Coagulation instruments": 0, "Scissors": 0, "Suction-irrigation": 0, "Specimen bag": 0, "Stapler": 0}', 
-                path + '/Hei-Chole24/frame_74250.png', 'output: {"Grasper": 1, "Clipper": 0, "Coagulation instruments": 1, "Scissors": 0, "Suction-irrigation": 0, "Specimen bag": 0, "Stapler": 0}', 
-                path + '/Hei-Chole24/frame_95625.png', 'output: {"Grasper": 0, "Clipper": 0, "Coagulation instruments": 0, "Scissors": 0, "Suction-irrigation": 0, "Specimen bag": 0, "Stapler": 1}', 
-                path + '/Hei-Chole12/frame_10875.png', 'output: {"Grasper": 0, "Clipper": 0, "Coagulation instruments": 0, "Scissors": 1, "Suction-irrigation": 0, "Specimen bag": 0, "Stapler": 0}', 
-                path + '/Hei-Chole24/frame_97500.png', 'output: {"Grasper": 0, "Clipper": 0, "Coagulation instruments": 0, "Scissors": 0, "Suction-irrigation": 0, "Specimen bag": 0, "Stapler": 1}',
-                'You just saw some images of a laparoscopic cholecystectomy with corresponding tool annotations. In the next image, assess which of these tools is present: Grasper, Clipper, Coagulation instruments, Scissors, Suction-irrigation, Specimen bag, Stapler. \
+                path + '/Hei-Chole24/frame_48750.png', 'output: {"Grasper": 1, "Bipolar Forceps": 0, "Hook": 0, "Scissors": 0, "Clipper": 0, "Irrigator": 1, "Specimen Bag": 0}', 
+                path + '/Hei-Chole11/frame_07125.png', 'output: {"Grasper": 1, "Bipolar Forceps": 1, "Hook": 0, "Scissors": 0, "Clipper": 0, "Irrigator": 0, "Specimen Bag": 0}', 
+                path + '/Hei-Chole24/frame_45000.png', 'output: {"Grasper": 1, "Bipolar Forceps": 1, "Hook": 0, "Scissors": 0, "Clipper": 0, "Irrigator": 0, "Specimen Bag": 0}', 
+                path + '/Hei-Chole24/frame_77625.png', 'output: {"Grasper": 1, "Bipolar Forceps": 0, "Hook": 0, "Scissors": 0, "Clipper": 0, "Irrigator": 0, "Specimen Bag": 0}', 
+                path + '/Hei-Chole12/frame_37125.png', 'output: {"Grasper": 1, "Bipolar Forceps": 1, "Hook": 0, "Scissors": 0, "Clipper": 0, "Irrigator": 0, "Specimen Bag": 0}', 
+                path + '/Hei-Chole24/frame_76500.png', 'output: {"Grasper": 1, "Bipolar Forceps": 0, "Hook": 0, "Scissors": 0, "Clipper": 1, "Irrigator": 0, "Specimen Bag": 0}', 
+                path + '/Hei-Chole24/frame_49500.png', 'output: {"Grasper": 1, "Bipolar Forceps": 0, "Hook": 0, "Scissors": 0, "Clipper": 0, "Irrigator": 1, "Specimen Bag": 0}', 
+                path + '/Hei-Chole12/frame_42375.png', 'output: {"Grasper": 0, "Bipolar Forceps": 0, "Hook": 0, "Scissors": 0, "Clipper": 0, "Irrigator": 0, "Specimen Bag": 1}', 
+                path + '/Hei-Chole12/frame_35250.png', 'output: {"Grasper": 1, "Bipolar Forceps": 0, "Hook": 0, "Scissors": 0, "Clipper": 0, "Irrigator": 0, "Specimen Bag": 1}', 
+                path + '/Hei-Chole11/frame_18750.png', 'output: {"Grasper": 0, "Bipolar Forceps": 1, "Hook": 0, "Scissors": 0, "Clipper": 0, "Irrigator": 0, "Specimen Bag": 0}', 
+                path + '/Hei-Chole24/frame_110250.png', 'output: {"Grasper": 1, "Bipolar Forceps": 0, "Hook": 0, "Scissors": 0, "Clipper": 0, "Irrigator": 1, "Specimen Bag": 1}', 
+                path + '/Hei-Chole24/frame_46125.png', 'output: {"Grasper": 1, "Bipolar Forceps": 1, "Hook": 0, "Scissors": 0, "Clipper": 0, "Irrigator": 0, "Specimen Bag": 0}', 
+                path + '/Hei-Chole11/frame_09375.png', 'output: {"Grasper": 0, "Bipolar Forceps": 0, "Hook": 0, "Scissors": 0, "Clipper": 1, "Irrigator": 0, "Specimen Bag": 0}', 
+                path + '/Hei-Chole12/frame_40875.png', 'output: {"Grasper": 1, "Bipolar Forceps": 0, "Hook": 0, "Scissors": 0, "Clipper": 0, "Irrigator": 1, "Specimen Bag": 0}', 
+                path + '/Hei-Chole24/frame_102375.png', 'output: {"Grasper": 1, "Bipolar Forceps": 0, "Hook": 0, "Scissors": 0, "Clipper": 1, "Irrigator": 0, "Specimen Bag": 0}', 
+                path + '/Hei-Chole24/frame_107625.png', 'output: {"Grasper": 1, "Bipolar Forceps": 0, "Hook": 0, "Scissors": 0, "Clipper": 0, "Irrigator": 0, "Specimen Bag": 1}', 
+                path + '/Hei-Chole24/frame_124500.png', 'output: {"Grasper": 0, "Bipolar Forceps": 0, "Hook": 0, "Scissors": 0, "Clipper": 0, "Irrigator": 0, "Specimen Bag": 1}', 
+                path + '/Hei-Chole11/frame_14625.png', 'output: {"Grasper": 0, "Bipolar Forceps": 0, "Hook": 0, "Scissors": 1, "Clipper": 0, "Irrigator": 0, "Specimen Bag": 0}', 
+                path + '/Hei-Chole12/frame_41625.png', 'output: {"Grasper": 1, "Bipolar Forceps": 0, "Hook": 0, "Scissors": 0, "Clipper": 0, "Irrigator": 1, "Specimen Bag": 0}', 
+                path + '/Hei-Chole12/frame_22500.png', 'output: {"Grasper": 1, "Bipolar Forceps": 0, "Hook": 0, "Scissors": 0, "Clipper": 1, "Irrigator": 0, "Specimen Bag": 0}', 
+                path + '/Hei-Chole24/frame_67875.png', 'output: {"Grasper": 1, "Bipolar Forceps": 1, "Hook": 0, "Scissors": 0, "Clipper": 0, "Irrigator": 0, "Specimen Bag": 0}', 
+                path + '/Hei-Chole12/frame_09000.png', 'output: {"Grasper": 0, "Bipolar Forceps": 0, "Hook": 0, "Scissors": 0, "Clipper": 1, "Irrigator": 0, "Specimen Bag": 0}', 
+                path + '/Hei-Chole24/frame_92625.png', 'output: {"Grasper": 1, "Bipolar Forceps": 0, "Hook": 0, "Scissors": 0, "Clipper": 0, "Irrigator": 0, "Specimen Bag": 0}', 
+                path + '/Hei-Chole24/frame_96000.png', 'output: {"Grasper": 0, "Bipolar Forceps": 0, "Hook": 0, "Scissors": 0, "Clipper": 0, "Irrigator": 0, "Specimen Bag": 0}', 
+                path + '/Hei-Chole11/frame_10875.png', 'output: {"Grasper": 0, "Bipolar Forceps": 0, "Hook": 0, "Scissors": 1, "Clipper": 0, "Irrigator": 0, "Specimen Bag": 0}', 
+                path + '/Hei-Chole24/frame_96750.png', 'output: {"Grasper": 0, "Bipolar Forceps": 0, "Hook": 0, "Scissors": 0, "Clipper": 0, "Irrigator": 0, "Specimen Bag": 0}', 
+                path + '/Hei-Chole12/frame_25875.png', 'output: {"Grasper": 0, "Bipolar Forceps": 0, "Hook": 0, "Scissors": 1, "Clipper": 0, "Irrigator": 0, "Specimen Bag": 0}', 
+                path + '/Hei-Chole12/frame_10125.png', 'output: {"Grasper": 0, "Bipolar Forceps": 0, "Hook": 0, "Scissors": 1, "Clipper": 0, "Irrigator": 0, "Specimen Bag": 0}', 
+                path + '/Hei-Chole24/frame_93000.png', 'output: {"Grasper": 1, "Bipolar Forceps": 0, "Hook": 0, "Scissors": 0, "Clipper": 0, "Irrigator": 0, "Specimen Bag": 0}', 
+                path + '/Hei-Chole24/frame_95250.png', 'output: {"Grasper": 1, "Bipolar Forceps": 0, "Hook": 0, "Scissors": 0, "Clipper": 0, "Irrigator": 0, "Specimen Bag": 0}', 
+                path + '/Hei-Chole24/frame_92250.png', 'output: {"Grasper": 1, "Bipolar Forceps": 0, "Hook": 0, "Scissors": 0, "Clipper": 0, "Irrigator": 0, "Specimen Bag": 0}', 
+                path + '/Hei-Chole24/frame_74250.png', 'output: {"Grasper": 1, "Bipolar Forceps": 1, "Hook": 0, "Scissors": 0, "Clipper": 0, "Irrigator": 0, "Specimen Bag": 0}', 
+                path + '/Hei-Chole24/frame_95625.png', 'output: {"Grasper": 0, "Bipolar Forceps": 0, "Hook": 0, "Scissors": 0, "Clipper": 0, "Irrigator": 0, "Specimen Bag": 0}', 
+                path + '/Hei-Chole12/frame_10875.png', 'output: {"Grasper": 0, "Bipolar Forceps": 0, "Hook": 0, "Scissors": 1, "Clipper": 0, "Irrigator": 0, "Specimen Bag": 0}', 
+                path + '/Hei-Chole24/frame_97500.png', 'output: {"Grasper": 0, "Bipolar Forceps": 0, "Hook": 0, "Scissors": 0, "Clipper": 0, "Irrigator": 0, "Specimen Bag": 0}',
+                'You just saw some images of a laparoscopic cholecystectomy with corresponding tool annotations. In the next image, assess which of these tools is present: Grasper, Bipolar Forceps, Hook, Scissors, Clipper, Irrigator, Specimen Bag. \
         Respond with a 0 or 1 for all tools according to whether or not the tool is present. \
         Use this JSON schema: {"tool_name": bool} and avoid line breaks.']
 
@@ -922,5 +924,20 @@ def get_prompts(path, task, model):
                                 PROMPTS[(task_, 'GPT4o')] = PROMPTS[(task_, model_)]
                 except:
                         pass
+
+        # Alias GeminiPro1-5 prompts for generative models that use the same JSON format
+        generative_aliases = ['Qwen2-VL-7B-Instruct', 'InternVL3-8B', 'MedGemma-4B', 'Qwen3-VL-8B-Instruct', 'Qwen3-VL-8B-Thinking']
+        gemini_tasks = [k for k in PROMPTS if k[1] == 'GeminiPro1-5']
+        for task_name, _ in gemini_tasks:
+                for alias in generative_aliases:
+                        if (task_name, alias) not in PROMPTS:
+                                PROMPTS[(task_name, alias)] = PROMPTS[(task_name, 'GeminiPro1-5')]
+
+        # Alias llava action prompt for other generative models too
+        llava_tasks = [k for k in PROMPTS if k[1] == 'llava_next_vicuna_7b']
+        for task_name, _ in llava_tasks:
+                for alias in generative_aliases:
+                        if (task_name, alias) not in PROMPTS:
+                                PROMPTS[(task_name, alias)] = PROMPTS[(task_name, 'llava_next_vicuna_7b')]
 
         return PROMPTS[(task, model)]

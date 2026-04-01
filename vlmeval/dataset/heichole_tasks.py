@@ -3,6 +3,7 @@
 
 from torch.utils.data import Dataset
 import os
+import numpy as np
 
 class HeiCholeDataloader(Dataset):
     def __init__(self, config, split):
@@ -43,7 +44,12 @@ class HeiCholeDataloader(Dataset):
             raise NotImplementedError
         
         self.few_shot = True if config['shots'] != 'zero' else False
+        self.max_samples = config.get('max_samples', None)
         self.labels = self.load_labels()
+        if self.max_samples is not None and self.max_samples < len(self.labels):
+            # Uniform sampling across the full time range (all videos)
+            indices = np.linspace(0, len(self.labels) - 1, self.max_samples, dtype=int)
+            self.labels = [self.labels[i] for i in indices]
 
     def load_labels(self):
         labels = []

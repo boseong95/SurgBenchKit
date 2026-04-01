@@ -33,8 +33,12 @@ class MultiBypass140PhaseRecognition(Dataset):
         self.transform = transform
 
         self.phase_map = {phase: idx for idx, phase in enumerate(config['label_names'])}
+        self.max_samples = config.get('max_samples', None)
         self.labels = self.load_labels()
-        self.labels = self.labels[:10]  # TODO remove this line - for debugging
+        if self.max_samples is not None and self.max_samples < len(self.labels):
+            import numpy as np
+            indices = np.linspace(0, len(self.labels) - 1, self.max_samples, dtype=int)
+            self.labels = [self.labels[i] for i in indices]
 
     def load_labels(self):
          ## Read val pickle files

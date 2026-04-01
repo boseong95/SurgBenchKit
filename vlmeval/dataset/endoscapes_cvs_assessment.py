@@ -4,6 +4,7 @@ from torch.utils.data import Dataset
 import os
 from PIL import Image
 import pandas as pd
+import numpy as np
 
 class EndoscapesCVSAssessment(Dataset):
     def __init__(self, config, split):
@@ -13,9 +14,11 @@ class EndoscapesCVSAssessment(Dataset):
         self.ann_path = os.path.join(self.data_dir , 'all_metadata.csv')
         self.split = split
         self.few_shot = True if config['shots'] != 'zero' else False
+        self.max_samples = config.get('max_samples', None)
         self.labels = self.load_labels()
-        self.labels = self.labels[:10] #TODO delete this for debugging
-        print(' ')
+        if self.max_samples is not None and self.max_samples < len(self.labels):
+            indices = np.linspace(0, len(self.labels) - 1, self.max_samples, dtype=int)
+            self.labels = [self.labels[i] for i in indices]
 
     def load_labels(self):
         labels = []

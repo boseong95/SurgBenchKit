@@ -1,5 +1,6 @@
 from torch.utils.data import Dataset
 import os
+import numpy as np
 
 
 class Cholec80PhaseRecognition(Dataset):
@@ -8,11 +9,15 @@ class Cholec80PhaseRecognition(Dataset):
         self.image_dir = os.path.join(config['data_config']['data_dir'], 'frames_25fps', split)
         self.data_dir = config['data_config']['data_dir']
 
-        self.map = {phase: idx for idx, phase in enumerate(config['label_names'])} 
+        self.map = {phase: idx for idx, phase in enumerate(config['label_names'])}
         self.split = split
         self.few_shot = True if config['shots'] != 'zero' else False
+        self.max_samples = config.get('max_samples', None)
         self.labels = self.load_labels()
-        
+        if self.max_samples is not None and self.max_samples < len(self.labels):
+            indices = np.linspace(0, len(self.labels) - 1, self.max_samples, dtype=int)
+            self.labels = [self.labels[i] for i in indices]
+
 
     def load_labels(self):
         labels = []
@@ -34,7 +39,6 @@ class Cholec80PhaseRecognition(Dataset):
                         frame_name = f'{line[0]}.jpg'
                         frame_path = os.path.join(self.image_dir, video_name, frame_name)
                         labels.append((frame_path, frame_label))
-        labels = labels[:10]  # TODO remove this line - for debugging
         return labels
 
     def __len__(self):

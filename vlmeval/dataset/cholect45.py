@@ -35,7 +35,11 @@ class Cholect45Triplet(Dataset):
             self.instrument_map = {int(line.split(':')[0]): line.strip().split(':')[1] for line in lines}
 
         self.transform = transform
+        self.max_samples = config.get('max_samples', None)
         self.labels = self.load_labels()
+        if self.max_samples is not None and self.max_samples < len(self.labels):
+            indices = np.linspace(0, len(self.labels) - 1, self.max_samples, dtype=int)
+            self.labels = [self.labels[i] for i in indices]
 
     def load_labels(self):
         fps_rate = 5
@@ -57,8 +61,6 @@ class Cholect45Triplet(Dataset):
                     frame_label = np.array(frame_label, dtype=np.float32)
                     frame_path = os.path.join(self.image_dir, video_name.split('.')[0], f'{frame_name:06d}.png')
                     labels.append((frame_path, frame_label))
-        labels = labels[:10]  # TODO remove this line - for debugging
-
         return labels
 
 

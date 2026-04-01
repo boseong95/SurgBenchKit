@@ -12,7 +12,11 @@ class Cholec80ToolRecognition(Dataset):
 
         self.split = split
         self.few_shot = True if config['shots'] != 'zero' else False
+        self.max_samples = config.get('max_samples', None)
         self.labels = self.load_labels()
+        if self.max_samples is not None and self.max_samples < len(self.labels):
+            indices = np.linspace(0, len(self.labels) - 1, self.max_samples, dtype=int)
+            self.labels = [self.labels[i] for i in indices]
     
     def load_labels(self):
         labels = []
@@ -39,7 +43,6 @@ class Cholec80ToolRecognition(Dataset):
                         frame_label = np.array(frame_label, dtype=np.float32)
                         frame_path = os.path.join(self.image_dir, video_name, frame_name)
                         labels.append((frame_path, frame_label))
-        labels = labels[:10]  # TODO remove this line - for debugging
         return labels
     
     def __len__(self):
