@@ -73,6 +73,7 @@ class InternVLChat(BaseModel):
                 trust_remote_code=True,
                 low_cpu_mem_usage=True,
                 device_map=device_map).eval()
+
         else:
             self.model = AutoModel.from_pretrained(
                 model_path,
@@ -81,6 +82,8 @@ class InternVLChat(BaseModel):
                 trust_remote_code=True,
                 low_cpu_mem_usage=True).eval().cuda()
             self.device = 'cuda'
+
+        _patch_internlm2_for_transformers_compat(self.model)
 
         if best_of_n > 1:
             assert version == 'V2.0', 'only support BoN evaluation with version==V2.0'

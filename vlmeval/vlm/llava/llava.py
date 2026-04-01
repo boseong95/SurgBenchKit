@@ -258,30 +258,14 @@ class LLaVA_Next(BaseModel):
         except ImportError:
             pass
 
-        if flash_attn_flag:
-            if "interleave" in model_path.lower():
-                model = LlavaForConditionalGeneration.from_pretrained(
-                    self.model_path,
-                    torch_dtype=torch.float16,
-                    low_cpu_mem_usage=True,
-                    use_flash_attention_2=True,
-                )
-            else:
-                model = LlavaNextForConditionalGeneration.from_pretrained(
-                    self.model_path,
-                    torch_dtype=torch.float16,
-                    low_cpu_mem_usage=True,
-                    use_flash_attention_2=True,
-                )
-        else:
-            if "interleave" in model_path.lower():
-                model = LlavaForConditionalGeneration.from_pretrained(
-                    self.model_path, torch_dtype=torch.float16, low_cpu_mem_usage=True
-                )
-            else:
-                model = LlavaNextForConditionalGeneration.from_pretrained(
-                    self.model_path, torch_dtype=torch.float16, low_cpu_mem_usage=True
-                )
+        attn_impl = 'flash_attention_2' if flash_attn_flag else 'eager'
+        MODEL_CLS = LlavaForConditionalGeneration if "interleave" in model_path.lower() else LlavaNextForConditionalGeneration
+        model = MODEL_CLS.from_pretrained(
+            self.model_path,
+            torch_dtype=torch.bfloat16,
+            low_cpu_mem_usage=True,
+            attn_implementation=attn_impl,
+        )
 
         model = model.eval()
         self.model = model.cuda()
@@ -395,8 +379,8 @@ class LLaVA_Next(BaseModel):
         prompt = self.processor.apply_chat_template(
             conversation, add_generation_prompt=True
         )
-        inputs = self.processor(prompt, images, return_tensors="pt").to(
-            "cuda", torch.float16
+        inputs = self.processor(text=prompt, images=images, return_tensors="pt").to(
+            "cuda", torch.bfloat16
         )
         output = self.model.generate(**inputs, **self.kwargs)
         answer = self.processor.decode(output[0], skip_special_token=True)

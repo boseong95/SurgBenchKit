@@ -43,6 +43,8 @@ from .xcomposer import (
 )
 from .yi_vl import Yi_VL
 from .internvl import InternVLChat
+from .internvl3 import InternVL3Chat
+from .qwen3_vl import Qwen3VLChat
 from .deepseek_vl import DeepSeekVL
 from .deepseek_vl2 import DeepSeekVL2
 from .janus import Janus

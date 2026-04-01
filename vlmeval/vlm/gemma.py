@@ -68,9 +68,17 @@ class Gemma3(BaseModel):
             logging.critical('Please install torch and transformers')
             raise e
 
-        self.model = Gemma3ForConditionalGeneration.from_pretrained(
-            model_path, device_map="cuda", attn_implementation="flash_attention_2"
-        ).eval()
+        try:
+            self.model = Gemma3ForConditionalGeneration.from_pretrained(
+                model_path, device_map="cuda", torch_dtype=torch.bfloat16,
+                attn_implementation="flash_attention_2"
+            ).eval()
+        except (ImportError, RuntimeError):
+            logging.warning("flash_attention_2 not available, falling back to eager attention.")
+            self.model = Gemma3ForConditionalGeneration.from_pretrained(
+                model_path, device_map="cuda", torch_dtype=torch.bfloat16,
+                attn_implementation="eager"
+            ).eval()
 
         self.device = self.model.device
         self.processor = AutoProcessor.from_pretrained(model_path)
