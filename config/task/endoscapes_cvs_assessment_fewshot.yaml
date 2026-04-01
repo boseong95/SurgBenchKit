@@ -3,6 +3,6 @@ name: endoscapes_cvs_assessment_fewshot
 data: EndoscapesCVSAssessment
 data_config:
   transform: None
-  data_dir: /path/to/endoscapes/
+  data_dir: /home/ubuntu/datasets/vlm/Cholec80-CVS
 label_names: ['C1', 'C2', 'C3']
 shots: five

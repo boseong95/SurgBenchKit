@@ -3,6 +3,6 @@ name: heichole_action_recognition_fewshot
 data: HeiCholeDataloader
 data_config:
   transform: None
-  data_dir: /Users/boseong/dataset/HeiChole
+  data_dir: /home/ubuntu/datasets/vlm/HeiCo
 label_names: ['grasp', 'hold', 'cut', 'clip']
 shots: one

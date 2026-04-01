@@ -3,7 +3,7 @@ name: dresden_anatomy_presence
 data: DresdenAnatomyPresence
 data_config:
   transform: None
-  data_dir: /path/to//DresdenSurgicalAnatomy
+  data_dir: /home/ubuntu/datasets/vlm/Cholec80
 label_names: ['abdominal wall', 'colon', 'inferior mesenteric artery', 'intestinal veins', 'liver', 'pancreas',
               'small intestine', 'spleen', 'stomach', 'ureter', 'null', 'vesicular glands']
 clip_eval_mode: 'sigmoid'  # multi-label binary classification

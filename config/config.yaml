@@ -6,7 +6,7 @@ defaults:
   - override hydra/job_logging: disabled  
 
 # Set model and task
-workdir: /pasteur/u/arau/projects/surg_bench/check_for_pub/
+workdir: /home/ubuntu/SurgBenchKit/outputs/
 exp_name: deleteme_for_pub
 eval_mode: infer_data
 

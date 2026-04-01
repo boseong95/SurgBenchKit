@@ -3,7 +3,7 @@ name: avos_action_recognition
 data: AVOSActionRecognition
 data_config:
   transform: None
-  data_dir: /path/to/AVOS
+  data_dir: /home/ubuntu/datasets/vlm/Cholec80
 label_names: ['cutting', 'tying', 'suturing', 'background']
 clip_eval_mode: 'singlelabel'  # single label multi-class classification
 shots: zero
