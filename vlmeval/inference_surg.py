@@ -137,7 +137,7 @@ def infer_data_video(
             f.write(prompt)
     
     # keep track of dataset name
-    dataset_name = dataset.dataset_name
+    dataset_name = getattr(dataset, 'dataset_name', getattr(dataset, 'task_name', 'unknown'))
     print(f'Video model: <{model_name}> for dataset: <{dataset_name}>')
     print('-'*60)
 
@@ -149,36 +149,52 @@ def infer_data_video(
     elif (
         'Phi-3.5-Vision' in model_name or \
         'InternVL2' in model_name or \
+        'InternVL3' in model_name or \
         'Qwen2-VL' in model_name or \
+        'Qwen3-VL' in model_name or \
+        'MedGemma' in model_name or \
         'gpt-4o' in model_name
-    ):  
+    ):
         def eval_model(video_path, prompt):
-            if 'gpt-4o' in model_name:
+            if 'Qwen3-VL' in model_name:
+                nframes = 64
+            elif 'InternVL3' in model_name or 'InternVL2' in model_name:
+                nframes = 64
+            elif 'gpt-4o' in model_name or 'Phi-3.5-Vision' in model_name or 'Qwen2-VL' in model_name:
                 nframes = 35
-            elif 'Phi-3.5-Vision' in model_name:
+            elif 'MedGemma' in model_name:
+                nframes = 16
+            else:
                 nframes = 35
-            elif 'Qwen2-VL' in model_name:
-                nframes = 35
-            elif 'InternVL2' in model_name:
-                nframes = 70
             prompt = prompt.replace('<NUM_SAMP>', str(nframes))
             message = [dict(type='text', value=prompt)]
 
 
             frames_presaved = 'jigsaws' in task['name'] or 'autolaparo' in task['name'] or 'heichole_skill_assessment' in task['name']
             if frames_presaved:
-                # assume frames are already saved
-                if 'jigsaws_skill_assessment' in task.name:
-                    frame_dir = '/'.join(video_path['path'].split('/')[-3:]).replace('jigsaws_', '')
-                    frame_dir = os.path.join(f'../data/jigsaws_skill_assessment', frame_dir)
-                    frame_dir = frame_dir.replace('.mp4', '_images')
+                # Frames pre-extracted at 0.2 fps
+                video_file = video_path['path']
+                if 'jigsaws' in task['name']:
+                    # JIGSAWS: {category}/video/{name}_capture1.avi → {category}/{name}_capture1_images/
+                    stem = osp.basename(video_file).replace('.avi', '').replace('.mp4', '')
+                    category_dir = osp.dirname(osp.dirname(video_file))
+                    frame_dir = osp.join(category_dir, f'{stem}_images')
+                elif 'heichole_skill_assessment' in task['name']:
+                    # HeiChole: Videos/Skill/{name}.mp4 → skill_frames/{name}_images/
+                    stem = osp.basename(video_file).replace('.mp4', '')
+                    data_dir = task['data_config']['data_dir']
+                    frame_dir = osp.join(data_dir, 'skill_frames', f'{stem}_images')
                 else:
-                    frame_dir = video_path.replace('.mp4', '_images')
+                    frame_dir = video_file.replace('.mp4', '_images')
                 
-                # NOTE: does not follow nframes, rather based on the saved presaved frame count
+                # Use pre-saved frames, capped at model-specific nframes limit
                 num_frames = sum(1 for f in os.listdir(frame_dir) if os.path.isfile(os.path.join(frame_dir, f)))
-                frame_idxs = list(range(num_frames))
-                # can sample frames here if it does not fit in memory
+                if num_frames > nframes:
+                    # Uniform subsample to fit model context
+                    import numpy as np
+                    frame_idxs = np.linspace(0, num_frames - 1, nframes, dtype=int).tolist()
+                else:
+                    frame_idxs = list(range(num_frames))
 
                 for frame_i in frame_idxs:
                     im = os.path.join(frame_dir, f'frame-{frame_i}.jpg')
@@ -230,27 +246,33 @@ def infer_data_video(
         else:
             if osp.exists(out_file):
                 os.remove(out_file)
-            if True: #try:
+            try:
                 if 'error_detection' in task['name']:
                     prompt = prompt.replace('<ERROR_TYPE>', label['error_type'])
                 ret = eval_model(video_path, prompt)
                 if isinstance(ret, int):  # returns int if gemini blocks the request (e.g. image contains a lot of blood)
                     dump('Blocked: ' + str(ret), out_file)
                     continue
-                else: 
+                else:
                     # clean up result:
-                    if 'jigsaws' in task['name'] or 'autolaparo' in task['name'] or 'heichole_skill_assessment' in task['name']:
-                        # slightly different format based on prompt
+                    if 'jigsaws' in task['name'] or 'autolaparo' in task['name']:
+                        # single-score output — save raw text
                         pred = ret
                     else:
-                        ret = ret.strip("```").strip("json").replace("\n","")
+                        start_index = ret.find('{')
+                        end_index = ret.rfind('}')
+                        if start_index != -1 and end_index != -1:
+                            result = ret[start_index:end_index + 1]
+                        else:
+                            result = "{}"
+                        ret = result.strip("```").strip("json").replace("\n","").replace("False", "0").replace("True", "1").replace("false", "0").replace("true", "1")
                         pred = json.loads(ret)
                     dump(pred, out_file)
-            
-            #except Exception as e:
-            #    print('Exception: ' + str(e))
-            #    dump('Exception: ' + str(e), out_file)
-            #    continue
+
+            except Exception as e:
+                print('Exception: ' + str(e))
+                dump('Exception: ' + str(e), out_file)
+                continue
     print('-'*60)
 
     preds, labels = eval_data(model, work_dir, name, dataset, task)
@@ -1165,22 +1187,108 @@ def eval_data(
 
         return preds, labels
     
-    elif 'jigsaws' in task['name'] or 'autolaparo' in task['name'] or 'heichole_skill_assessment' in task['name']:
+    elif 'heichole_skill_assessment' in task['name']:
+        # HeiChole skill: JSON output with multiple dimensions
+        skill_dims = list(task['label_names'])
+        successful_preds = 0
+        for file in tqdm(all_files):
+            label = all_files_labels[file]
+            if file not in evaluation_files:
+                pred_dict = {d: 0 for d in skill_dims}
+            else:
+                with open(file, 'r') as f:
+                    pred = json.load(f)
+                if isinstance(pred, str) and ("Blocked" in pred or "Exception" in pred):
+                    pred_dict = {d: 0 for d in skill_dims}
+                elif isinstance(pred, dict):
+                    pred_dict = {d: int(pred.get(d, 0)) for d in skill_dims}
+                    successful_preds += 1
+                else:
+                    pred_dict = {d: 0 for d in skill_dims}
+            preds.append(pred_dict)
+            labels.append(label)
+
+        from scipy.stats import spearmanr
+        from sklearn.metrics import f1_score
+        results = []
+        for dim in skill_dims:
+            dp = np.array([p.get(dim, 0) for p in preds])
+            dl = np.array([l.get(dim, 0) for l in labels])
+            acc = np.mean(dp == dl)
+            mae = np.mean(np.abs(dp - dl))
+            mf1 = f1_score(dl, dp, labels=[1,2,3,4,5], average='macro', zero_division=0)
+            rho, pv = spearmanr(dp, dl) if len(set(dp)) > 1 and len(set(dl)) > 1 else (0.0, 1.0)
+            results.append({'Dimension': dim, 'Accuracy': round(acc,4), 'MAE': round(mae,4), 'Macro_F1': round(mf1,4), 'Spearman_rho': round(rho,4), 'Spearman_p': round(pv,4)})
+            print(f'  {dim}: Acc={acc:.4f}, MAE={mae:.4f}, F1={mf1:.4f}, Spearman={rho:.4f}')
+        ap = np.array([[p.get(d,0) for d in skill_dims] for p in preds])
+        al = np.array([[l.get(d,0) for d in skill_dims] for l in labels])
+        oa, om = np.mean(ap==al), np.mean(np.abs(ap-al))
+        of1 = f1_score(al.flatten(), ap.flatten(), labels=[1,2,3,4,5], average='macro', zero_division=0)
+        orho, op = spearmanr(ap.flatten(), al.flatten()) if len(set(ap.flatten()))>1 and len(set(al.flatten()))>1 else (0.0, 1.0)
+        results.append({'Dimension': 'Overall', 'Accuracy': round(oa,4), 'MAE': round(om,4), 'Macro_F1': round(of1,4), 'Spearman_rho': round(orho,4), 'Spearman_p': round(op,4)})
+        print(f'  Overall: Acc={oa:.4f}, MAE={om:.4f}, F1={of1:.4f}, Spearman={orho:.4f}, Successful={successful_preds}/{len(all_files)}')
+        results_df = pd.DataFrame(results)
+        csv_path = osp.join(work_dir, f'metrics_{task["name"]}_{model_name.replace("/","")}_{name}.csv')
+        results_df.to_csv(csv_path, index=False)
+        print(f'  Metrics saved to: {csv_path}')
+        return preds, labels
+
+    elif 'jigsaws' in task['name'] or 'autolaparo' in task['name']:
+        # JIGSAWS/AutoLaparo skill: single-score output, regex-parsed (matches paper protocol)
         label_map = {idx: label for idx, label in enumerate(task['label_names'])}
         successful_preds = 0
+        default_pred = task['label_names'][0]  # '1'
+
+        # Load predictions from files
+        for file in tqdm(all_files):
+            label = all_files_labels[file]
+            if file not in evaluation_files:
+                preds.append(default_pred)
+            else:
+                with open(file, 'r') as f:
+                    pred = json.load(f)
+                if isinstance(pred, str) and ("Blocked" in pred or "Exception" in pred):
+                    preds.append(default_pred)
+                else:
+                    preds.append(str(pred))
+            labels.append(str(label))
+
+        # Regex match scores from predictions
         for i, pred in enumerate(preds):
             pattern = '|'.join([re.escape(label) for label in task.label_names])
-            matches = re.findall(pattern, pred)
+            matches = re.findall(pattern, str(pred))
             if len(matches) == 1:
                 preds[i] = matches[0]
                 successful_preds += 1
             elif len(matches) == 0:
-                preds[i] = task.label_names[0]
+                preds[i] = default_pred
             else:
                 preds[i] = matches[-1]
                 successful_preds += 1
-        preds = np.array(preds)
-        labels = np.array(labels)
+
+        preds = np.array(preds, dtype=np.uint8)
+        labels = np.array(labels, dtype=np.uint8)
+
+        # Compute macro F1, Spearman, accuracy, MAE
+        from scipy.stats import spearmanr
+        from sklearn.metrics import f1_score
+        macro_f1 = f1_score(labels, preds, labels=[1,2,3,4,5], average='macro', zero_division=0)
+        acc = np.mean(preds == labels)
+        mae = np.mean(np.abs(preds.astype(int) - labels.astype(int)))
+        rho, pv = spearmanr(preds, labels) if len(set(preds)) > 1 and len(set(labels)) > 1 else (0.0, 1.0)
+        print(f'  Accuracy={acc:.4f}, MAE={mae:.4f}, Macro_F1={macro_f1:.4f}, Spearman={rho:.4f} (p={pv:.4f}), Successful={successful_preds}/{len(all_files)}')
+
+        # Save metrics CSV
+        results_df = pd.DataFrame([{
+            'Accuracy': round(acc, 4), 'MAE': round(mae, 4),
+            'Macro_F1': round(macro_f1, 4), 'Spearman_rho': round(rho, 4),
+            'Successful': f'{successful_preds}/{len(all_files)}',
+        }])
+        csv_path = osp.join(work_dir, f'metrics_{task["name"]}_{model_name.replace("/","")}_{name}.csv')
+        results_df.to_csv(csv_path, index=False)
+        print(f'  Metrics saved to: {csv_path}')
+
+        return preds, labels
 
 
     ### compute and display metrics

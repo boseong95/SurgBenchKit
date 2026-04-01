@@ -5,6 +5,7 @@ from vlmeval.api import *
 from functools import partial
 from vlmeval.inference_surg import *
 from vlmeval.dataset import DresdenAnatomyPresence, EndoscapesCVSAssessment, Cholec80PhaseRecognition, Cholec80ToolRecognition, HeiCholeDataloader, MultiBypass140PhaseRecognition, Cholect45Triplet, ErrorRecognition, ErrorDetection, AVOSActionRecognition, JIGSAWSSkillAssessment
+from vlmeval.dataset.endoscapes_object_detection import EndoscapesObjectDetection
 
 PandaGPT_ROOT = None
 MiniGPT4_ROOT = None
@@ -42,6 +43,7 @@ data_map = {
     "ErrorDetection": ErrorDetection,
     "AVOSActionRecognition": AVOSActionRecognition,
     "JIGSAWSSkillAssessment": JIGSAWSSkillAssessment,
+    "EndoscapesObjectDetection": EndoscapesObjectDetection,
 }
 
 

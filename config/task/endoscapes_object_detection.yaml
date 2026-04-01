@@ -1,0 +1,8 @@
+# Task
+name: endoscapes_object_detection
+data: EndoscapesObjectDetection
+data_config:
+  data_dir: /home/ubuntu/datasets/vlm/Endoscapes2023/endoscapes
+category: all
+label_names: ['cystic_plate', 'calot_triangle', 'cystic_artery', 'cystic_duct', 'gallbladder', 'tool']
+shots: zero

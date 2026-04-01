@@ -5,7 +5,7 @@ class JIGSAWSSkillAssessment(Dataset):
     def __init__(self, config, split):
         assert split in ['train', 'val', 'test']
         self.data_dir = config['data_config']['data_dir']
-        self.category = config['data_config']['category'] # knot tying, needle passing, suturing
+        self.category = config['data_config']['category']
         self.dataset_name = config['data_config']['dataset_name']
         self.score = config['data_config']['score']
         assert self.category in ['Knot_Tying', 'Needle_Passing', 'Suturing']
@@ -14,22 +14,21 @@ class JIGSAWSSkillAssessment(Dataset):
 
     def load_data(self):
         labels = []
-
         label_path = f'{self.data_dir}{self.category}/meta_file_{self.category}.txt'
         video_dir = f'{self.data_dir}{self.category}/video/'
-        with open (label_path, 'r') as f:
+        with open(label_path, 'r') as f:
             label = [line.strip().split('\t') for line in f.readlines()]
             for example in label:
-                if len(example) == 1: continue
-                cols = ['video_name', 'experience', 'grs', 'respect_for_tissue', 'suture_needle_handling', 'time_and_motion', 'flow_of_operation', 'overall_performance', 'quality_of_final_product']
+                if len(example) == 1:
+                    continue
+                cols = ['video_name', 'experience', 'grs', 'respect_for_tissue',
+                        'suture_needle_handling', 'time_and_motion', 'flow_of_operation',
+                        'overall_performance', 'quality_of_final_product']
                 example = [s for s in example if s != '']
                 assert len(example) == len(cols)
                 video_name = example[cols.index('video_name')]
-                video_name = f'{video_name.replace(self.category + "_", "")}.mp4'
-                _, video_name = os.path.split(video_name)
-                video_path = os.path.join(video_dir, video_name)
+                video_path = os.path.join(video_dir, f'{video_name}_capture1.avi')
                 score = example[cols.index(self.score)]
-                
                 labels.append((video_path, score))
         return labels
 
@@ -39,7 +38,4 @@ class JIGSAWSSkillAssessment(Dataset):
     def __getitem__(self, idx):
         video_path, video_label = self.labels[idx]
         video = {'path': video_path}
-        return (
-            video,
-            video_label
-        )
+        return (video, video_label)

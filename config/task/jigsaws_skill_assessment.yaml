@@ -1,0 +1,12 @@
+# JIGSAWS Skill Assessment — Knot Tying, respect_for_tissue (default)
+name: jigsaws_skill_assessment
+data: JIGSAWSSkillAssessment
+data_config:
+  transform: None
+  data_dir: /home/ubuntu/datasets/vlm/JIGSAWS/
+  category: Knot_Tying
+  dataset_name: jigsaws
+  score: respect_for_tissue
+label_names: ['1', '2', '3', '4', '5']
+clip_eval_mode: 'singlelabel'
+shots: zero

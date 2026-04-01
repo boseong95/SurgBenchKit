@@ -1,0 +1,10 @@
+# HeiChole Skill Assessment — all dimensions, JSON output
+name: heichole_skill_assessment
+data: HeiCholeDataloader
+data_config:
+  transform: None
+  data_dir: /home/ubuntu/datasets/vlm/HeiCo
+  score: tissue_handling  # kept for backward compat, but all dims evaluated
+label_names: ['depth_perception', 'bimanual_dexterity', 'efficiency', 'tissue_handling', 'difficulty']
+clip_eval_mode: 'singlelabel'
+shots: zero

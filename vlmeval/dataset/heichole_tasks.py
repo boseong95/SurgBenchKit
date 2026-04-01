@@ -19,6 +19,7 @@ class HeiCholeDataloader(Dataset):
             folders = [6, 19, 10, 8, 20]
         else:
             folders = [4, 1, 22, 16, 13]
+        self.folders = folders
         self.image_dir = os.path.join(config['data_config']['data_dir'], 'extracted_frames')
         self.data_dir = config['data_config']['data_dir']
 
@@ -55,25 +56,24 @@ class HeiCholeDataloader(Dataset):
         labels = []
 
         if self.task_name == 'Skill':
-            ann_paths = os.listdir(os.path.join(self.data_dir, 'Annotations', self.task_name))
-            for ann_path in ann_paths:
-                if 'Dissection' in ann_path:
-                    continue
-                video_name = ann_path.split('_')[0]
-                video_path = os.path.join(self.data_dir, 'videos-skill-dissection', f'{video_name}_dissection.mp4')
+            score_keys = ['depth_perception', 'bimanual_dexterity', 'efficiency', 'tissue_handling', 'difficulty']
+            skill_video_dir = os.path.join(self.data_dir, 'Videos', 'Skill')
+            ann_dir = os.path.join(self.data_dir, 'Annotations', self.task_name)
 
-                with open(os.path.join(self.data_dir, 'Annotations', self.task_name, ann_path), 'r') as f:
-                    lines = f.readlines()
-                    assert len(lines) == 1
-                    depth_perception, bimanual_dexterity, efficiency, tissue_handling, difficulty = lines[0].strip().split(',')
-                    scores = {'depth_perception': depth_perception,
-                              'bimanual_dexterity': bimanual_dexterity,
-                              'efficiency': efficiency,
-                              'tissue_handling': tissue_handling,
-                              'difficulty': difficulty}
-                    assert self.score in scores.keys()
+            # Load both calot and dissection clips with phase-matched GT
+            for video_id in [f'Hei-Chole{f}' for f in self.folders]:
+                for phase in ['calot', 'dissection']:
+                    video_path = os.path.join(skill_video_dir, f'{video_id}_{phase}.mp4')
+                    ann_tag = 'Calot' if phase == 'calot' else 'Dissection'
+                    ann_path = os.path.join(ann_dir, f'{video_id}_{ann_tag}_Skill.csv')
 
-                    labels.append((video_path, scores[self.score]))
+                    if not os.path.exists(video_path) or not os.path.exists(ann_path):
+                        continue
+
+                    with open(ann_path, 'r') as f:
+                        values = f.readline().strip().split(',')
+                    scores = {k: int(v) for k, v in zip(score_keys, values)}
+                    labels.append((video_path, scores))
             return labels
             
         fps_rate = 25
