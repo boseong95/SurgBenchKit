@@ -1,0 +1,9 @@
+# CholecT50 Phase Recognition — 7 phases, single-label
+name: cholect50_phase_recognition
+data: CholecT50PhaseRecognition
+data_config:
+  transform: None
+  data_dir: /home/ubuntu/datasets/vlm/CholecT50/CholecT50
+label_names: ['Preparation', 'Calot Triangle Dissection', 'Clipping & Cutting', 'Gallbladder Dissection', 'Gallbladder Packaging', 'Cleaning & Coagulation', 'Gallbladder Extraction']
+clip_eval_mode: 'singlelabel'
+shots: zero

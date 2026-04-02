@@ -8,8 +8,7 @@ from sharedeval.data.cholec_helpers import *
 
 import torch
 import os
-import re
-from difflib import get_close_matches
+from difflib import get_close_matches 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
 
@@ -54,8 +53,6 @@ def infer_data(
         def eval_model(frame, prompt):
             return model.generate([frame, prompt])
 
-    is_detection = 'object_detection' in task['name']
-
     # as API calls often fail, we save all predictions as json files, and then read those in an eval loop
     for frame, label in tqdm(dataset):
         out_file = osp.join(write_dir, f'{"-".join(frame["path"].split("/")[-3:])}.json')
@@ -65,25 +62,11 @@ def infer_data(
             if osp.exists(out_file):
                 os.remove(out_file)
             try:
-                ret = eval_model(frame['path'], prompt)
+                ret = eval_model(frame['path'], prompt) 
                 if isinstance(ret, int):  # returns int if gemini blocks the request (e.g. image contains a lot of blood)
                     dump('Blocked: ' + str(ret), out_file)
                     continue
-
-                if is_detection:
-                    # For detection: save raw output + parsed bboxes with model-specific parsing
-                    from vlmeval.bbox_utils import get_bbox_parser, get_coord_range
-                    img_w, img_h = label['im_size_wh']
-                    parser = get_bbox_parser(model_name)
-                    parsed = parser(ret, img_w, img_h)
-                    # parsed is either a list of [x1,y1,x2,y2] or dict {cat: [[x1,y1,x2,y2],...]}
-                    pred = {
-                        'raw_output': ret,
-                        'parsed_bboxes': parsed,
-                        'coord_range': get_coord_range(model_name),
-                    }
-                    dump(pred, out_file)
-                else:
+                else: 
                     start_index = ret.find('{')
                     end_index = ret.rfind('}')  # Use rfind to get the last occurrence of '}'
 
@@ -137,7 +120,7 @@ def infer_data_video(
             f.write(prompt)
     
     # keep track of dataset name
-    dataset_name = getattr(dataset, 'dataset_name', getattr(dataset, 'task_name', 'unknown'))
+    dataset_name = dataset.dataset_name
     print(f'Video model: <{model_name}> for dataset: <{dataset_name}>')
     print('-'*60)
 
@@ -149,52 +132,36 @@ def infer_data_video(
     elif (
         'Phi-3.5-Vision' in model_name or \
         'InternVL2' in model_name or \
-        'InternVL3' in model_name or \
         'Qwen2-VL' in model_name or \
-        'Qwen3-VL' in model_name or \
-        'MedGemma' in model_name or \
         'gpt-4o' in model_name
-    ):
+    ):  
         def eval_model(video_path, prompt):
-            if 'Qwen3-VL' in model_name:
-                nframes = 64
-            elif 'InternVL3' in model_name or 'InternVL2' in model_name:
-                nframes = 64
-            elif 'gpt-4o' in model_name or 'Phi-3.5-Vision' in model_name or 'Qwen2-VL' in model_name:
+            if 'gpt-4o' in model_name:
                 nframes = 35
-            elif 'MedGemma' in model_name:
-                nframes = 16
-            else:
+            elif 'Phi-3.5-Vision' in model_name:
                 nframes = 35
+            elif 'Qwen2-VL' in model_name:
+                nframes = 35
+            elif 'InternVL2' in model_name:
+                nframes = 70
             prompt = prompt.replace('<NUM_SAMP>', str(nframes))
             message = [dict(type='text', value=prompt)]
 
 
             frames_presaved = 'jigsaws' in task['name'] or 'autolaparo' in task['name'] or 'heichole_skill_assessment' in task['name']
             if frames_presaved:
-                # Frames pre-extracted at 0.2 fps
-                video_file = video_path['path']
-                if 'jigsaws' in task['name']:
-                    # JIGSAWS: {category}/video/{name}_capture1.avi → {category}/{name}_capture1_images/
-                    stem = osp.basename(video_file).replace('.avi', '').replace('.mp4', '')
-                    category_dir = osp.dirname(osp.dirname(video_file))
-                    frame_dir = osp.join(category_dir, f'{stem}_images')
-                elif 'heichole_skill_assessment' in task['name']:
-                    # HeiChole: Videos/Skill/{name}.mp4 → skill_frames/{name}_images/
-                    stem = osp.basename(video_file).replace('.mp4', '')
-                    data_dir = task['data_config']['data_dir']
-                    frame_dir = osp.join(data_dir, 'skill_frames', f'{stem}_images')
+                # assume frames are already saved
+                if 'jigsaws_skill_assessment' in task.name:
+                    frame_dir = '/'.join(video_path['path'].split('/')[-3:]).replace('jigsaws_', '')
+                    frame_dir = os.path.join(f'../data/jigsaws_skill_assessment', frame_dir)
+                    frame_dir = frame_dir.replace('.mp4', '_images')
                 else:
-                    frame_dir = video_file.replace('.mp4', '_images')
+                    frame_dir = video_path.replace('.mp4', '_images')
                 
-                # Use pre-saved frames, capped at model-specific nframes limit
+                # NOTE: does not follow nframes, rather based on the saved presaved frame count
                 num_frames = sum(1 for f in os.listdir(frame_dir) if os.path.isfile(os.path.join(frame_dir, f)))
-                if num_frames > nframes:
-                    # Uniform subsample to fit model context
-                    import numpy as np
-                    frame_idxs = np.linspace(0, num_frames - 1, nframes, dtype=int).tolist()
-                else:
-                    frame_idxs = list(range(num_frames))
+                frame_idxs = list(range(num_frames))
+                # can sample frames here if it does not fit in memory
 
                 for frame_i in frame_idxs:
                     im = os.path.join(frame_dir, f'frame-{frame_i}.jpg')
@@ -246,33 +213,27 @@ def infer_data_video(
         else:
             if osp.exists(out_file):
                 os.remove(out_file)
-            try:
+            if True: #try:
                 if 'error_detection' in task['name']:
                     prompt = prompt.replace('<ERROR_TYPE>', label['error_type'])
                 ret = eval_model(video_path, prompt)
                 if isinstance(ret, int):  # returns int if gemini blocks the request (e.g. image contains a lot of blood)
                     dump('Blocked: ' + str(ret), out_file)
                     continue
-                else:
+                else: 
                     # clean up result:
-                    if 'jigsaws' in task['name'] or 'autolaparo' in task['name']:
-                        # single-score output — save raw text
+                    if 'jigsaws' in task['name'] or 'autolaparo' in task['name'] or 'heichole_skill_assessment' in task['name']:
+                        # slightly different format based on prompt
                         pred = ret
                     else:
-                        start_index = ret.find('{')
-                        end_index = ret.rfind('}')
-                        if start_index != -1 and end_index != -1:
-                            result = ret[start_index:end_index + 1]
-                        else:
-                            result = "{}"
-                        ret = result.strip("```").strip("json").replace("\n","").replace("False", "0").replace("True", "1").replace("false", "0").replace("true", "1")
+                        ret = ret.strip("```").strip("json").replace("\n","")
                         pred = json.loads(ret)
                     dump(pred, out_file)
-
-            except Exception as e:
-                print('Exception: ' + str(e))
-                dump('Exception: ' + str(e), out_file)
-                continue
+            
+            #except Exception as e:
+            #    print('Exception: ' + str(e))
+            #    dump('Exception: ' + str(e), out_file)
+            #    continue
     print('-'*60)
 
     preds, labels = eval_data(model, work_dir, name, dataset, task)
@@ -338,8 +299,15 @@ def infer_data_paligemma(
     
 
     elif 'object_detection' in task['name']:
-        from vlmeval.bbox_utils import parse_bbox_paligemma
+        def process_object_detection(output):
+            import re
+            loc_values = re.findall(r'<loc(\d{4})>', output)
+            if len(loc_values) != 4:
+                return None
 
+            y0, x0, y1, x1 = map(int, loc_values)
+            return y0, x0, y1, x1
+        
         for frame, label in tqdm(dataset):
             out_file = osp.join(write_dir, f'{"-".join(frame["path"].split("/")[-3:])}.json')
             if osp.exists(out_file) and not kwargs['override_outputs']:
@@ -348,25 +316,19 @@ def infer_data_paligemma(
                 if osp.exists(out_file):
                     os.remove(out_file)
 
-                img_w, img_h = label['im_size_wh']
                 outputs = dict()
-                raw_outputs = dict()
                 for i, p in enumerate(prompt):
                     ret = eval_model(frame['path'], p)
-                    raw_outputs[task.label_names[i]] = ret
-                    bboxes = parse_bbox_paligemma(ret, img_w, img_h)
-                    cat_name = task.label_names[i]
-                    if len(bboxes) == 1:
-                        outputs[cat_name] = bboxes[0]
-                    elif len(bboxes) > 1:
-                        for o, bbox in enumerate(bboxes):
-                            outputs[cat_name + str(o + 1)] = bbox
-                pred = {
-                    'raw_output': raw_outputs,
-                    'parsed_bboxes': outputs,
-                    'coord_range': 1024,
-                }
-                dump(pred, out_file)
+                    num_found_objs = len(ret.split(';'))
+                    for o, found_object in enumerate(ret.split(';')):
+                        output = process_object_detection(found_object)
+                        if output is None:
+                            continue
+                        if task.label_names[i] in ['tool', 'hand', 'forceps', 'needledriver', 'bovie']:  # endoscapes: only tool can have more than one instance. avos: all can be > 1
+                            outputs[task.label_names[i]+str(o+1)] = list(output)
+                        else:
+                            outputs[task.label_names[i]] = list(output)
+                dump(outputs, out_file)
 
 
     elif 'phase' in task['name']:
@@ -657,19 +619,16 @@ def eval_data(
     if 'dresden_anatomy' in task['name']:
         label_map = {idx: label for idx, label in enumerate(task['label_names'])}
         default = np.atleast_1d(np.zeros(len(label_map)-1))  # -1 for the 'null' class we ignore
-        for file in tqdm(all_files):
-            if file not in evaluation_files:
+        for file in tqdm(evaluation_files):
+            with open(file, 'r') as f:
+                pred = json.load(f)
+            if "Blocked" in pred or "Exception" in pred:
+                preds.append(default)
+            elif len(pred) != len(default):
                 preds.append(default)
             else:
-                with open(file, 'r') as f:
-                    pred = json.load(f)
-                if "Blocked" in pred or "Exception" in pred:
-                    preds.append(default)
-                elif len(pred) != len(default):
-                    preds.append(default)
-                else:
-                    preds.append(np.array(list(pred.values())) * 1)
-                    successful_preds += 1
+                preds.append(np.array(list(pred.values())) * 1)
+                successful_preds += 1
 
             label = all_files_labels[file]
             label_fixed = np.delete(label, -2)  # cut null class
@@ -679,23 +638,20 @@ def eval_data(
         label_map = {idx: label for idx, label in enumerate(task['label_names'])}
         labels_dict = {filename: label_array for filename, label_array in dataset.labels}
         default = 0
-        for file in tqdm(all_files):
-            if file not in evaluation_files:
+        for file in tqdm(evaluation_files):
+            with open(file, 'r') as f:
+                pred = json.load(f)
+            if isinstance(pred, int):
+                preds.append(pred)
+            elif "Blocked" in pred or "Exception" in pred:
                 preds.append(default)
+            elif isinstance(pred, dict):
+                preds.append(list(pred.values())[0])
+                successful_preds += 1
             else:
-                with open(file, 'r') as f:
-                    pred = json.load(f)
-                if isinstance(pred, int):
-                    preds.append(pred)
-                elif "Blocked" in pred or "Exception" in pred:
-                    preds.append(default)
-                elif isinstance(pred, dict):
-                    preds.append(list(pred.values())[0])
-                    successful_preds += 1
-                else:
-                    # get only the number using regex
-                    preds.append(int(re.search(r'\d+', pred).group()))
-                    successful_preds += 1
+                # get only the number using regex
+                preds.append(int(re.search(r'\d+', pred).group()))
+                successful_preds += 1
 
             label = task['label_names'].index(all_files_labels[file]) + 1
             labels.append(label)
@@ -705,46 +661,43 @@ def eval_data(
         label_map = {}
         labels_dict = {path: (s, e) for path, (s, e, _) in dataset.labels}
         default = (0, 0)
-        for file in tqdm(all_files):
-            if file not in evaluation_files:
+        for file in tqdm(evaluation_files):
+            with open(file, 'r') as f:
+                pred = json.load(f)
+            if "Blocked" in pred or "Exception" in pred:
                 preds.append(default)
-            else:
-                with open(file, 'r') as f:
-                    pred = json.load(f)
-                if "Blocked" in pred or "Exception" in pred:
-                    preds.append(default)
-                elif isinstance(pred, dict):
-                    if 'gemini' in model_name:
-                        start_time = pred['start_time']
-                        end_time = pred['end_time']
+            elif isinstance(pred, dict):
+                if 'gemini' in model_name:
+                    start_time = pred['start_time']
+                    end_time = pred['end_time']
+                    start_time = (int(start_time.split(':')[0]) * 60 + int(start_time.split(':')[1])) * 10
+                    end_time = (int(end_time.split(':')[0]) * 60 + int(end_time.split(':')[1])) * 10
+                elif 'Qwen2-VL' in model_name:
+                    start_time = pred['start']
+                    end_time = pred['end']
+                    if len(start_time.split(':')) == 2:
                         start_time = (int(start_time.split(':')[0]) * 60 + int(start_time.split(':')[1])) * 10
+                    elif len(start_time.split(':')) == 3:
+                        start_time = (int(start_time.split(':')[1]) * 60 + int(start_time.split(':')[2])) * 10
+                    if len(end_time.split(':')) == 2:
                         end_time = (int(end_time.split(':')[0]) * 60 + int(end_time.split(':')[1])) * 10
-                    elif 'Qwen2-VL' in model_name:
-                        start_time = pred['start']
-                        end_time = pred['end']
-                        if len(start_time.split(':')) == 2:
-                            start_time = (int(start_time.split(':')[0]) * 60 + int(start_time.split(':')[1])) * 10
-                        elif len(start_time.split(':')) == 3:
-                            start_time = (int(start_time.split(':')[1]) * 60 + int(start_time.split(':')[2])) * 10
-                        if len(end_time.split(':')) == 2:
-                            end_time = (int(end_time.split(':')[0]) * 60 + int(end_time.split(':')[1])) * 10
-                        elif len(end_time.split(':')) == 3:
-                            end_time = (int(end_time.split(':')[1]) * 60 + int(end_time.split(':')[2])) * 10
-                    else:
-                        if 'gpt-4o' in model_name:
-                            nframes = 35
-                        elif 'Phi-3.5-Vision' in model_name:
-                            nframes = 35
-                        elif 'Qwen2-VL' in model_name:
-                            nframes = 35
-                        elif 'InternVL2' in model_name:
-                            nframes = 70
-                        start_time = int(pred['start'] * (1800 / nframes))
-                        end_time = int(pred['end'] * (1800 / nframes))
-                    preds.append((start_time, end_time))
-                    successful_preds += 1
+                    elif len(end_time.split(':')) == 3:
+                        end_time = (int(end_time.split(':')[1]) * 60 + int(end_time.split(':')[2])) * 10
                 else:
-                    preds.append(default)
+                    if 'gpt-4o' in model_name:
+                        nframes = 35
+                    elif 'Phi-3.5-Vision' in model_name:
+                        nframes = 35
+                    elif 'Qwen2-VL' in model_name:
+                        nframes = 35
+                    elif 'InternVL2' in model_name:
+                        nframes = 70
+                    start_time = int(pred['start'] * (1800 / nframes))
+                    end_time = int(pred['end'] * (1800 / nframes))
+                preds.append((start_time, end_time))
+                successful_preds += 1
+            else:
+                preds.append(default)
             
             label = extract_error_label(all_files_labels[file])
             labels.append(label)
@@ -753,62 +706,55 @@ def eval_data(
     elif 'multibypass140' in task['name']:
         label_map = {idx: label for idx, label in enumerate(task['label_names'])}
         default = np.atleast_1d(np.array(dataset.labels[0][1]) * 0)
-        for file in tqdm(all_files):
-            if file not in evaluation_files:
+        for file in tqdm(evaluation_files):
+            with open(file, 'r') as f:
+                pred = json.load(f)
+            if "Blocked" in pred or "Exception" in pred:
                 preds.append(default)
             else:
-                with open(file, 'r') as f:
-                    pred = json.load(f)
-                if "Blocked" in pred or "Exception" in pred:
-                    preds.append(default)
-                else:
-                    preds.append(np.array(list(pred.values())) * 1)
-                    successful_preds += 1
+                preds.append(np.array(list(pred.values())) * 1)
+                successful_preds += 1
 
             label = all_files_labels[file]
             labels.append(label)
         labels = np.array(labels).reshape(-1,1)
 
-    elif 'cholec80' in task['name']:
+    elif 'cholec80' in task['name'] or 'cholect50' in task['name']:
         label_map = {idx: label for idx, label in enumerate(task['label_names'])}
         labels_dict = {filename: label_array for filename, label_array in dataset.labels}
         default = np.atleast_1d(np.array(dataset.labels[0][1]) * 0)
-        for file in tqdm(all_files):
-            if file not in evaluation_files:
+        for file in tqdm(evaluation_files):
+            with open(file, 'r') as f:
+                pred = json.load(f)
+            if "Blocked" in pred or "Exception" in pred:
                 preds.append(default)
+            elif 'phase' in task['name']:
+                preds.append(np.array(list(pred.values())) * 1)
+                successful_preds += 1
             else:
-                with open(file, 'r') as f:
-                    pred = json.load(f)
-                if "Blocked" in pred or "Exception" in pred:
-                    preds.append(default) 
-                elif len(pred) != len(label_map) and 'phase' not in task['name']:
-                    preds.append(default) 
-                else:
-                    preds.append(np.array(list(pred.values())) * 1)
-                    successful_preds += 1
+                # Use key-based lookup so extra keys (e.g. SpecimenBag in CholecT50 prompts) are ignored
+                pred_vec = np.array([pred.get(label, 0) for label in task['label_names']], dtype=np.float32)
+                preds.append(pred_vec)
+                successful_preds += 1
             label = all_files_labels[file]
             labels.append(label)
-        if 'cholec80_phase_recognition' in task['name']:
+        if 'cholec80_phase_recognition' in task['name'] or 'cholect50_phase_recognition' in task['name']:
             labels = np.array(labels).reshape(-1,1)
     
     elif 'avos_action' in task['name']:
         label_map = {idx: label for idx, label in enumerate(task['label_names'])}
         label_map_inversed = {label: idx for idx, label in enumerate(task['label_names'])}
         default = np.atleast_1d(np.array(3))  # 3 is background
-        for file in all_files:  # os.listdir(read_dir):
-            if file not in evaluation_files:
+        for file in evaluation_files:
+            with open(file, 'r') as f:
+                pred = json.load(f)
+            if not isinstance(pred, dict):
+                preds.append(default)
+            elif "Blocked" in pred or "Exception" in pred:
                 preds.append(default)
             else:
-                with open(file, 'r') as f:
-                    pred = json.load(f)
-            # check if pred is a dict
-                if not isinstance(pred, dict):
-                    preds.append(default)
-                elif "Blocked" in pred or "Exception" in pred:
-                    preds.append(default)
-                else:
-                    preds.append(np.array(list(pred.values())) * 1)
-                    successful_preds += 1
+                preds.append(np.array(list(pred.values())) * 1)
+                successful_preds += 1
             folder = file.split('-')[2]
             frame = file.split('-')[3].strip('.json')
             label = label_map_inversed[all_files_labels[file]]
@@ -831,29 +777,26 @@ def eval_data(
         verbs, targets, instruments = [], [], []
         verbs_gt, targets_gt, instruments_gt = [], [], []
         default = {"instrument": ["null"], "verb": ["null"], "target": ["null"]}
-        for file in tqdm(all_files):
-            if file not in evaluation_files:
-                pred = default
-            else:
-                with open(file, 'r') as f:
-                    pred = json.load(f)
-                    if "Blocked" in pred:
-                        pred = default
-                    elif "Exception" in pred:
-                        pred = default
-                    else:
-                        successful_preds += 1
+        for file in tqdm(evaluation_files):  # only evaluate frames with predictions
+            with open(file, 'r') as f:
+                pred = json.load(f)
+                if not isinstance(pred, dict) or "Blocked" in pred or "Exception" in pred:
+                    pred = default
+                elif 'instrument' not in pred or 'verb' not in pred or 'target' not in pred:
+                    pred = default
+                else:
+                    successful_preds += 1
             verb_logits, target_logits, instrument_logits = pred_to_logits(pred, dataset)
             verbs.append(verb_logits)
             targets.append(target_logits)
             instruments.append(instrument_logits)
-            file = file.split('/')[-1]
-            if file[0] == 'r':
-                folder = file.split('-')[1]
-                frame = str(int(file.split('-')[2].split('.')[0]))
+            fname = file.split('/')[-1]
+            if fname[0] == 'r':
+                folder = fname.split('-')[1]
+                frame = str(int(fname.split('-')[2].split('.')[0]))
             else:
-                folder = file.split('-')[0]
-                frame = str(int(file.split('-')[1].split('.')[0]))
+                folder = fname.split('-')[0]
+                frame = str(int(fname.split('-')[1].split('.')[0]))
             verb_logits_gt, target_logits_gt, instrument_logits_gt = verb_labels[folder + '-' + frame], target_labels[folder + '-' + frame], instrument_labels[folder + '-' + frame]
             verbs_gt.append(verb_logits_gt)
             targets_gt.append(target_logits_gt)
@@ -867,19 +810,16 @@ def eval_data(
         default = np.atleast_1d(np.array(dataset.labels[0][1]) * 0)
         if 'heichole_tool_recognition' in task['name']:
                 default = default[:7]
-        for file in tqdm(all_files):
-            if file not in evaluation_files:
+        for file in tqdm(evaluation_files):
+            with open(file, 'r') as f:
+                pred = json.load(f)
+            if "Blocked" in pred or "Exception" in pred:
+                preds.append(default)
+            elif len(pred) != len(label_map) and 'phase' not in task['name']:
                 preds.append(default)
             else:
-                with open(file, 'r') as f:
-                    pred = json.load(f)
-                if "Blocked" in pred or "Exception" in pred:
-                     preds.append(default) 
-                elif len(pred) != len(label_map) and 'phase' not in task['name']:
-                    preds.append(default) 
-                else:
-                    preds.append(np.array(list(pred.values())) * 1)
-                    successful_preds += 1
+                preds.append(np.array(list(pred.values())) * 1)
+                successful_preds += 1
             label = all_files_labels[file]
             # HeiChole dataset states "Tools 7-20 Reserved for future additions" --> remove
             if 'heichole_tool_recognition' in task['name']:
@@ -890,127 +830,91 @@ def eval_data(
         label_map = {idx: label for idx, label in enumerate(task['label_names'])}
         default = np.atleast_1d(np.array(dataset.labels[0][1]) * 0)
 
-        for file in tqdm(all_files):
-            if file not in evaluation_files:
+        for file in tqdm(evaluation_files):
+            with open(file, 'r') as f:
+                pred = json.load(f)
+            if "Blocked" in pred or "Exception" in pred:
+                preds.append(default)
+            elif len(pred) != 3:
                 preds.append(default)
             else:
-                with open(file, 'r') as f:
-                    pred = json.load(f)
-                if "Blocked" in pred or "Exception" in pred:
-                    preds.append(default)
-                elif len(pred) != 3:
-                    preds.append(default)
-                else:
-                    preds.append(np.array(list(pred.values())) * 1)
-                    successful_preds += 1
+                preds.append(np.array(list(pred.values())) * 1)
+                successful_preds += 1
             label = all_files_labels[file]
             labels.append(label)
     
-    elif 'endoscapes_object_detection' in task['name']:
+    elif 'endoscapes_object_detection' in task['name']: # TODO is this needed?
         label_map_inverted = dataset.category_ids_to_name
         label_map = {v: k for k, v in label_map_inverted.items()}
+        labels_dict = {filename: label_array for filename, label_array in dataset.labels}
         cocoGt = COCO(osp.join(dataset.data_dir, dataset.split, 'annotation_coco.json'))
         image_ids_to_evaluate = []
         default = {}
         label_counts = {label: 0 for label in label_map.keys()}
-        for file in all_files:
-            if file not in evaluation_files:
-                pred_data = default
+        for file in evaluation_files:
+            with open(file, 'r') as f:
+                pred = json.load(f)
+            if "Blocked" in pred or "Exception" in pred:
+                pred = default
             else:
-                with open(file, 'r') as f:
-                    pred_data = json.load(f)
-                if isinstance(pred_data, str) and ("Blocked" in pred_data or "Exception" in pred_data):
-                    pred_data = default
-                else:
-                    successful_preds += 1
-
+                successful_preds += 1
             folder = file.split('/')[-1].split('-')[2].split('_')[0]
             frame = file.split('/')[-1].split('_')[1].split('.')[0] + '.jpg'
-            label = all_files_labels[file]
-            image_id = dataset.file_names_to_id[folder + '_' + frame]
+            label = all_files_labels[file] # labels_dict[osp.join(dataset.data_dir, dataset.split, folder + '_' + frame)]
+            image_id =  dataset.file_names_to_id[folder + '_' + frame]
             image_ids_to_evaluate.append(image_id)
-
-            # Count GT labels
+            # add to label_counts
             for category_name in label.keys():
-                if category_name in label_map:
-                    label_counts[category_name] += len(label[category_name])
+                if not category_name in label_map:
+                    continue
+                label_counts[category_name] += len(label[category_name])
 
-            # Extract parsed bboxes (already in pixel coordinates from inference)
-            if isinstance(pred_data, dict) and 'parsed_bboxes' in pred_data:
-                parsed = pred_data['parsed_bboxes']
-            else:
-                parsed = pred_data  # legacy format
-
-            # Convert parsed bboxes to COCO format
-            if isinstance(parsed, dict):
-                for category_name, bbox_or_bboxes in parsed.items():
-                    if category_name in ('raw_output', 'coord_range', 'im_size_wh'):
-                        continue
-                    # Normalize category name
-                    cat_clean = category_name.lower().replace(' ', '_').replace('cyctic', 'cystic')
-                    # Strip trailing digits for multi-instance keys like "tool1", "tool2"
-                    cat_base = re.sub(r'\d+$', '', cat_clean)
-                    if cat_base not in label_map:
-                        # Try close match
-                        matches = get_close_matches(cat_base, label_map.keys(), n=1, cutoff=0.6)
-                        if matches:
-                            cat_base = matches[0]
-                        else:
-                            continue
-                    category_id = label_map[cat_base]
-
-                    # Handle single box [x1,y1,x2,y2] or list of boxes [[x1,y1,x2,y2],...]
-                    if isinstance(bbox_or_bboxes, list) and len(bbox_or_bboxes) == 4 and all(isinstance(c, (int, float)) for c in bbox_or_bboxes):
-                        bboxes = [bbox_or_bboxes]
-                    elif isinstance(bbox_or_bboxes, list) and all(isinstance(b, list) for b in bbox_or_bboxes):
-                        bboxes = bbox_or_bboxes
-                    else:
-                        continue
-
-                    for bbox in bboxes:
-                        if len(bbox) != 4:
-                            continue
-                        x1, y1, x2, y2 = bbox
-                        width = x2 - x1
-                        height = y2 - y1
-                        if width <= 0 or height <= 0:
-                            continue
-                        coco_format = {"image_id": image_id, "category_id": category_id,
-                                       "bbox": [x1, y1, width, height], "score": 1.0}
-                        preds.append(coco_format)
-
-        print(f'Detection eval: {successful_preds} successful predictions, {len(preds)} COCO-format detections')
+            for category_name in pred.keys():
+                if len(pred[category_name]) == 4:
+                    y0, x0, y1, x1 = pred[category_name]
+                else:
+                    continue
+                if 'gemini' in model_name:
+                    x0 *= label['im_size_wh'][0] / 1000  #TODO this is for Gemini. Check how other models handle this
+                    x1 *= label['im_size_wh'][0] / 1000
+                    y0 *= label['im_size_wh'][1] / 1000
+                    y1 *= label['im_size_wh'][1] / 1000
+                elif 'paligemma' in model_name: # paligemma assumes coodinates for 1024 X 1024 images. endoscapes images are 854 x 480
+                    x0 *= 854 / 1024
+                    x1 *= 854 / 1024
+                    y0 *= 480 / 1024
+                    y1 *= 480 / 1024
+                width = x1 - x0
+                height = y1 - y0
+                if not category_name.replace(' ','_') in label_map:
+                    continue
+                if not 'tool' in category_name:
+                    category_id = label_map[category_name.replace('cyctic', 'cystic').replace(' ', '_')]
+                    coco_format = {"image_id": image_id, "category_id": category_id, "bbox": [x0, y0, width, height], "score": 1.0}
+                else:
+                    coco_format = {"image_id": image_id, "category_id": label_map['tool'], "bbox": [x0, y0, width, height], "score": 1.0}
+                preds.append(coco_format)
         dump(preds, osp.join(read_dir, 'results.json'))
+        cocoDt = cocoGt.loadRes(osp.join(read_dir, 'results.json'))
         image_ids_to_evaluate = list(set(image_ids_to_evaluate))
+        cocoEval = COCOeval(cocoGt, cocoDt, 'bbox')
+        cocoEval.params.imgIds = image_ids_to_evaluate
         results = []
-
-        if len(preds) == 0:
-            # No valid predictions — output NaN for all categories
-            print('WARNING: No valid bbox predictions. Outputting NaN for all metrics.')
-            for category_id, category_name in dataset.category_ids_to_name.items():
-                results.append({
-                    'Class': category_name,
-                    'AP@0.50:0.95': float('nan'),
-                    'AP@0.50': float('nan'),
-                    'AP@0.75': float('nan'),
-                    'AR@1': float('nan'),
-                    'AR@10': float('nan'),
-                })
-        elif dataset.category == 'all':
-            cocoDt = cocoGt.loadRes(osp.join(read_dir, 'results.json'))
-            cocoEval = COCOeval(cocoGt, cocoDt, 'bbox')
-            cocoEval.params.imgIds = image_ids_to_evaluate
+        if dataset.category == 'all':
             for category_id, category_name in dataset.category_ids_to_name.items():
                 print('#####################################   Evaluating category:', category_name)
                 cocoEval.params.catIds = [category_id]
                 cocoEval.evaluate()
                 cocoEval.accumulate()
                 cocoEval.summarize()
-                AP_50_95_all = cocoEval.stats[0]
-                AP_50_all = cocoEval.stats[1]
-                AP_75_all = cocoEval.stats[2]
-                AR_1_all = cocoEval.stats[6]
-                AR_10_all = cocoEval.stats[7]
+                # Extracting metrics
+                AP_50_95_all = cocoEval.stats[0]  # AP@0.50:0.95 for area=all
+                AP_50_all = cocoEval.stats[1]     # AP@0.50 for area=all
+                AP_75_all = cocoEval.stats[2]     # AP@0.75 for area=all
+                AR_1_all = cocoEval.stats[6]      # AR@1 for area=all
+                AR_10_all = cocoEval.stats[7]     # AR@10 for area=all
+                
+                # Storing results for the category
                 results.append({
                     'Class': category_name,
                     'AP@0.50:0.95': AP_50_95_all,
@@ -1019,7 +923,6 @@ def eval_data(
                     'AR@1': AR_1_all,
                     'AR@10': AR_10_all,
                 })
-
         df = pd.DataFrame(results)
 
         # Separate "tool" and "anatomies"
@@ -1074,16 +977,13 @@ def eval_data(
         frame_name_idx = 4
         if 'paligemma' in model_name:
             frame_name_idx = 5
-        for file in tqdm(all_files):
-            if file not in evaluation_files:
+        for file in tqdm(evaluation_files):
+            with open(file, 'r') as f:
+                pred = json.load(f)
+            if "Blocked" in pred or "Exception" in pred:
                 pred = default
-            else: 
-                with open(file, 'r') as f:
-                    pred = json.load(f)
-                if "Blocked" in pred or "Exception" in pred:
-                    pred = default
-                else:
-                    successful_preds += 1
+            else:
+                successful_preds += 1
             parts = file.split('-')
             frame = '-'.join(parts[frame_name_idx:]).split('.')[0] + '.jpg'
             label = all_files_labels[file] # labels_dict[osp.join(dataset.data_dir, dataset.split, folder + '_' + frame)]
@@ -1187,108 +1087,22 @@ def eval_data(
 
         return preds, labels
     
-    elif 'heichole_skill_assessment' in task['name']:
-        # HeiChole skill: JSON output with multiple dimensions
-        skill_dims = list(task['label_names'])
-        successful_preds = 0
-        for file in tqdm(all_files):
-            label = all_files_labels[file]
-            if file not in evaluation_files:
-                pred_dict = {d: 0 for d in skill_dims}
-            else:
-                with open(file, 'r') as f:
-                    pred = json.load(f)
-                if isinstance(pred, str) and ("Blocked" in pred or "Exception" in pred):
-                    pred_dict = {d: 0 for d in skill_dims}
-                elif isinstance(pred, dict):
-                    pred_dict = {d: int(pred.get(d, 0)) for d in skill_dims}
-                    successful_preds += 1
-                else:
-                    pred_dict = {d: 0 for d in skill_dims}
-            preds.append(pred_dict)
-            labels.append(label)
-
-        from scipy.stats import spearmanr
-        from sklearn.metrics import f1_score
-        results = []
-        for dim in skill_dims:
-            dp = np.array([p.get(dim, 0) for p in preds])
-            dl = np.array([l.get(dim, 0) for l in labels])
-            acc = np.mean(dp == dl)
-            mae = np.mean(np.abs(dp - dl))
-            mf1 = f1_score(dl, dp, labels=[1,2,3,4,5], average='macro', zero_division=0)
-            rho, pv = spearmanr(dp, dl) if len(set(dp)) > 1 and len(set(dl)) > 1 else (0.0, 1.0)
-            results.append({'Dimension': dim, 'Accuracy': round(acc,4), 'MAE': round(mae,4), 'Macro_F1': round(mf1,4), 'Spearman_rho': round(rho,4), 'Spearman_p': round(pv,4)})
-            print(f'  {dim}: Acc={acc:.4f}, MAE={mae:.4f}, F1={mf1:.4f}, Spearman={rho:.4f}')
-        ap = np.array([[p.get(d,0) for d in skill_dims] for p in preds])
-        al = np.array([[l.get(d,0) for d in skill_dims] for l in labels])
-        oa, om = np.mean(ap==al), np.mean(np.abs(ap-al))
-        of1 = f1_score(al.flatten(), ap.flatten(), labels=[1,2,3,4,5], average='macro', zero_division=0)
-        orho, op = spearmanr(ap.flatten(), al.flatten()) if len(set(ap.flatten()))>1 and len(set(al.flatten()))>1 else (0.0, 1.0)
-        results.append({'Dimension': 'Overall', 'Accuracy': round(oa,4), 'MAE': round(om,4), 'Macro_F1': round(of1,4), 'Spearman_rho': round(orho,4), 'Spearman_p': round(op,4)})
-        print(f'  Overall: Acc={oa:.4f}, MAE={om:.4f}, F1={of1:.4f}, Spearman={orho:.4f}, Successful={successful_preds}/{len(all_files)}')
-        results_df = pd.DataFrame(results)
-        csv_path = osp.join(work_dir, f'metrics_{task["name"]}_{model_name.replace("/","")}_{name}.csv')
-        results_df.to_csv(csv_path, index=False)
-        print(f'  Metrics saved to: {csv_path}')
-        return preds, labels
-
-    elif 'jigsaws' in task['name'] or 'autolaparo' in task['name']:
-        # JIGSAWS/AutoLaparo skill: single-score output, regex-parsed (matches paper protocol)
+    elif 'jigsaws' in task['name'] or 'autolaparo' in task['name'] or 'heichole_skill_assessment' in task['name']:
         label_map = {idx: label for idx, label in enumerate(task['label_names'])}
         successful_preds = 0
-        default_pred = task['label_names'][0]  # '1'
-
-        # Load predictions from files
-        for file in tqdm(all_files):
-            label = all_files_labels[file]
-            if file not in evaluation_files:
-                preds.append(default_pred)
-            else:
-                with open(file, 'r') as f:
-                    pred = json.load(f)
-                if isinstance(pred, str) and ("Blocked" in pred or "Exception" in pred):
-                    preds.append(default_pred)
-                else:
-                    preds.append(str(pred))
-            labels.append(str(label))
-
-        # Regex match scores from predictions
         for i, pred in enumerate(preds):
             pattern = '|'.join([re.escape(label) for label in task.label_names])
-            matches = re.findall(pattern, str(pred))
+            matches = re.findall(pattern, pred)
             if len(matches) == 1:
                 preds[i] = matches[0]
                 successful_preds += 1
             elif len(matches) == 0:
-                preds[i] = default_pred
+                preds[i] = task.label_names[0]
             else:
                 preds[i] = matches[-1]
                 successful_preds += 1
-
-        preds = np.array(preds, dtype=np.uint8)
-        labels = np.array(labels, dtype=np.uint8)
-
-        # Compute macro F1, Spearman, accuracy, MAE
-        from scipy.stats import spearmanr
-        from sklearn.metrics import f1_score
-        macro_f1 = f1_score(labels, preds, labels=[1,2,3,4,5], average='macro', zero_division=0)
-        acc = np.mean(preds == labels)
-        mae = np.mean(np.abs(preds.astype(int) - labels.astype(int)))
-        rho, pv = spearmanr(preds, labels) if len(set(preds)) > 1 and len(set(labels)) > 1 else (0.0, 1.0)
-        print(f'  Accuracy={acc:.4f}, MAE={mae:.4f}, Macro_F1={macro_f1:.4f}, Spearman={rho:.4f} (p={pv:.4f}), Successful={successful_preds}/{len(all_files)}')
-
-        # Save metrics CSV
-        results_df = pd.DataFrame([{
-            'Accuracy': round(acc, 4), 'MAE': round(mae, 4),
-            'Macro_F1': round(macro_f1, 4), 'Spearman_rho': round(rho, 4),
-            'Successful': f'{successful_preds}/{len(all_files)}',
-        }])
-        csv_path = osp.join(work_dir, f'metrics_{task["name"]}_{model_name.replace("/","")}_{name}.csv')
-        results_df.to_csv(csv_path, index=False)
-        print(f'  Metrics saved to: {csv_path}')
-
-        return preds, labels
+        preds = np.array(preds)
+        labels = np.array(labels)
 
 
     ### compute and display metrics
@@ -1313,9 +1127,6 @@ def eval_data(
     if not 'error_detection' in task['name']:
         preds = np.array(preds, dtype=np.uint8)
         labels = np.array(labels, dtype=np.uint8)
-    if len(labels) != len(all_files): #TODO needed? not sure what this does
-        raise NotImplementedError 
-
     eval_metrics(labels, preds, label_map, work_dir, task, model_name, name, successful_preds, len_test_files=len(all_files))
 
     return preds, labels

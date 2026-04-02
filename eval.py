@@ -27,7 +27,14 @@ def main(cfg: DictConfig):
     else:
         if cfg.task.name == 'intermountain_skill_assessment':
             cfg.task.name = f'{cfg.task.name}_{cfg.task.data_config.category}'
-        prompt = get_prompts(cfg.task.data_config.data_dir, cfg.task.name, cfg.model.name)
+        try:
+            prompt = get_prompts(cfg.task.data_config.data_dir, cfg.task.name, cfg.model.name)
+        except KeyError:
+            import os
+            prompt_file = os.path.join(cfg.workdir, cfg.task.name, cfg.model.name, cfg.exp_name, 'prompt.txt')
+            prompt = open(prompt_file).read().strip() if os.path.exists(prompt_file) else ''
+
+
 
     if cfg.model.contrastive:
         cfg.eval_mode = f'{cfg.eval_mode}_contrastive'

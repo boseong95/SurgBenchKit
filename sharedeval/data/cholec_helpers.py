@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas.plotting as pd_plotting
@@ -41,7 +42,7 @@ def pred_to_logits(pred, dataset):
 
 def set_idx(v, idx):
     ignore = [999]
-    if idx not in ignore:
+    if idx not in ignore and 0 <= idx < len(v):
         v[idx] = 1
 
 
@@ -74,3 +75,21 @@ def print_table(metrics_df, out_name='metrics_table.png'):
         if k[1] == 0:
             cell.set_width(0.25)
     plt.savefig(out_name, bbox_inches='tight', dpi=300)
+
+import os
+
+def get_triplet_component_labels(component_dir):
+    labels = {}
+    for fname in os.listdir(component_dir):
+        if not fname.endswith('.txt'):
+            continue
+        video = fname.replace('.txt', '')
+        with open(os.path.join(component_dir, fname)) as f:
+            for line in f:
+                parts = line.strip().split(',')
+                frame_num = int(parts[0])
+                import numpy as np
+                vec = np.array([int(x) for x in parts[1:]], dtype=np.float32)
+                labels[f'{video}-{frame_num}'] = vec
+    return labels
+

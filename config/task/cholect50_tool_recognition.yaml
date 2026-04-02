@@ -1,0 +1,9 @@
+# CholecT50 Tool Presence Detection — 6 tools, multi-label
+name: cholect50_tool_recognition
+data: CholecT50ToolRecognition
+data_config:
+  transform: None
+  data_dir: /home/ubuntu/datasets/vlm/CholecT50/CholecT50
+label_names: ['Grasper', 'Bipolar', 'Hook', 'Scissors', 'Clipper', 'Irrigator']
+clip_eval_mode: 'sigmoid'
+shots: zero

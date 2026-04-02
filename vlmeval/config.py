@@ -4,8 +4,9 @@ from vlmeval.vlm import *
 from vlmeval.api import *
 from functools import partial
 from vlmeval.inference_surg import *
-from vlmeval.dataset import DresdenAnatomyPresence, EndoscapesCVSAssessment, Cholec80PhaseRecognition, Cholec80ToolRecognition, HeiCholeDataloader, MultiBypass140PhaseRecognition, Cholect45Triplet, ErrorRecognition, ErrorDetection, AVOSActionRecognition, JIGSAWSSkillAssessment
+from vlmeval.dataset import DresdenAnatomyPresence, EndoscapesCVSAssessment, Cholec80PhaseRecognition, Cholec80ToolRecognition, HeiCholeDataloader, MultiBypass140PhaseRecognition, Cholect45Triplet, ErrorRecognition, ErrorDetection, AVOSActionRecognition, JIGSAWSSkillAssessment, CholecT50PhaseRecognition, CholecT50ToolRecognition
 from vlmeval.dataset.endoscapes_object_detection import EndoscapesObjectDetection
+from vlmeval.dataset.cholect50_status import CholecT50StatusReasoning
 
 PandaGPT_ROOT = None
 MiniGPT4_ROOT = None
@@ -44,20 +45,17 @@ data_map = {
     "AVOSActionRecognition": AVOSActionRecognition,
     "JIGSAWSSkillAssessment": JIGSAWSSkillAssessment,
     "EndoscapesObjectDetection": EndoscapesObjectDetection,
+    "CholecT50PhaseRecognition": CholecT50PhaseRecognition,
+    "CholecT50ToolRecognition": CholecT50ToolRecognition,
+    "CholecT50StatusReasoning": CholecT50StatusReasoning,
 }
 
 
 class ShellModel:
     # A shell model that does not load any weights for computing metrics over existing model outputs
     def __init__(self, name, eval_type=None):
-        if 'llava' in name:
-            name = 'llava-v1.6-vicuna-7b-hf'
-        elif 'Qwen' in name:
-            name = 'Qwen2-VL-7B-Instruct'
-        elif 'Gemini' in name:
-            name = 'gemini-1.5-pro'
-        elif 'GPT' in name:
-            name = "gpt-4o-2024-08-06"
+        # name is the model's canonical name from the config YAML — use it as-is so
+        # eval_data reads predictions from the correct per-model output directory.
         self.name = name
         self.eval_type = eval_type
         self.model = None
