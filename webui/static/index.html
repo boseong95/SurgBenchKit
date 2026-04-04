@@ -56,10 +56,43 @@
     <!-- Main -->
     <main class="flex-1 overflow-y-auto p-6">
 
+      <!-- Model prediction toggles -->
+      <div id="view-section" class="mb-4 hidden">
+        <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Models</p>
+        <div id="view-tags" class="flex flex-wrap gap-2"></div>
+      </div>
+
+      <!-- Leaderboard -->
+      <div id="leaderboard-section" class="mb-5 hidden">
+        <div class="flex items-center gap-3 mb-2">
+          <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Leaderboard</p>
+          <button id="leaderboard-perclass-btn" onclick="toggleLeaderboardPerClass()"
+            class="text-xs px-2 py-0.5 rounded border border-gray-300 text-gray-500 hover:border-gray-400 hover:text-gray-700 transition">
+            Per-class
+          </button>
+        </div>
+        <div id="leaderboard-table" class="bg-white border border-gray-200 rounded-xl overflow-hidden text-sm"></div>
+      </div>
+
       <!-- Dataset tags -->
       <div id="dataset-section" class="mb-5 hidden">
         <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Datasets</p>
         <div id="dataset-tags" class="flex flex-wrap gap-2"></div>
+      </div>
+
+      <!-- VTRB Phase Easy section -->
+      <div id="vtrb-phase-section" class="mb-5 hidden">
+        <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Subtask Filter</p>
+        <div id="vtrb-phase-subtasks" class="flex flex-wrap gap-2 mb-3"></div>
+        <div id="vtrb-phase-dist" class="mb-2 hidden"></div>
+        <div id="vtrb-phase-model-legend" class="flex flex-wrap gap-x-4 gap-y-1 px-1 mb-3 hidden"></div>
+        <div id="vtrb-phase-grid" class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"></div>
+      </div>
+
+      <!-- VTRB Few-shot examples panel -->
+      <div id="vtrb-fewshot-section" class="mb-5 hidden">
+        <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Few-shot ICL Examples</p>
+        <div id="vtrb-fewshot-grid" class="flex gap-3 overflow-x-auto pb-1"></div>
       </div>
 
       <!-- Prompt panel -->
@@ -81,11 +114,11 @@
           class="border border-gray-300 rounded-md px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400">
         </select>
       </div>
-      <!-- Sample count row (always visible) -->
-      <div class="mb-5 flex items-center gap-4">
-        <label class="text-sm text-gray-600 font-medium">Samples</label>
+      <!-- Sample count row — shown for frame tasks, hidden on dashboard/video tasks -->
+      <div id="samples-row" class="hidden mb-4 flex items-center gap-2">
+        <span class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Samples</span>
         <select id="n-input"
-          class="border border-gray-300 rounded-md px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400">
+          class="border border-gray-200 rounded-md px-2 py-1 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-300 text-gray-600">
           <option value="10">10</option>
           <option value="20" selected>20</option>
           <option value="50">50</option>
@@ -93,7 +126,7 @@
           <option value="0">All</option>
         </select>
         <button id="refresh-btn"
-          class="ml-2 px-4 py-1.5 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700 transition">
+          class="px-3 py-1 bg-blue-600 text-white rounded-md text-xs hover:bg-blue-700 transition">
           Load
         </button>
       </div>
@@ -118,10 +151,16 @@
         <div id="action-histogram" class="flex flex-col gap-2"></div>
       </div>
 
+      <!-- Triplet distribution (shown for triplet tasks) -->
+      <div id="triplet-dist-section" class="mb-5 hidden">
+        <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Triplet component distribution (loaded frames)</p>
+        <div id="triplet-dist" class="grid grid-cols-3 gap-6"></div>
+      </div>
+
       <!-- Filter bar -->
       <div id="filter-section" class="mb-4 hidden">
         <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Filter by label</p>
-        <div id="filter-btns" class="flex flex-wrap gap-2"></div>
+        <div id="filter-btns" class="flex flex-wrap gap-2 items-center"></div>
       </div>
 
       <!-- Loading -->
@@ -135,6 +174,28 @@
 
       <!-- Dashboard (shown when no task selected) -->
       <div id="dashboard" class="hidden">
+
+        <!-- Performance Overview -->
+        <div id="radar-section" class="hidden mb-10">
+          <div class="flex items-center justify-between mb-1">
+            <h2 class="text-lg font-semibold text-gray-700">Model Performance Overview</h2>
+            <div class="flex gap-1 bg-gray-100 rounded-full p-0.5">
+              <button id="radar-pill-acc" data-metric="accuracy"
+                class="radar-pill px-3 py-1 rounded-full text-xs font-medium transition bg-white shadow text-gray-700">Acc</button>
+              <button id="radar-pill-wf1" data-metric="weighted_f1"
+                class="radar-pill px-3 py-1 rounded-full text-xs font-medium transition text-gray-400">W-F1</button>
+            </div>
+          </div>
+          <!-- Model toggles -->
+          <div id="radar-model-toggles" class="flex flex-wrap gap-2 mb-4"></div>
+          <!-- Radar -->
+          <div id="radar-svg" class="flex justify-center" style="max-width:420px;margin:0 auto"></div>
+          <p class="text-xs text-gray-400 text-center mb-3 italic">Hover vertices for model details &nbsp;·&nbsp; 🖼️ frame tasks &nbsp;·&nbsp; 🎥 video tasks</p>
+          <!-- Table -->
+          <div id="radar-table"></div>
+        </div>
+
+        <!-- Available Datasets -->
         <h2 class="text-lg font-semibold text-gray-700 mb-1">Available Datasets</h2>
         <p class="text-sm text-gray-400 mb-4">Click a card to start browsing</p>
 
@@ -169,7 +230,44 @@
            style="grid-template-columns: repeat(auto-fill, minmax(220px, 1fr))">
       </div>
 
+      <!-- Phase planning GT grid -->
+      <div id="planning-section" class="hidden">
+        <div id="planning-legend" class="flex flex-wrap gap-2 mb-3"></div>
+        <div id="planning-model-chips" class="flex flex-wrap gap-2 mb-4"></div>
+        <div id="planning-grid" class="grid gap-4"
+             style="grid-template-columns: repeat(auto-fill, minmax(240px, 1fr))">
+        </div>
+      </div>
+
     </main>
+  </div>
+
+  <!-- Filmstrip modal -->
+  <div id="filmstrip-modal" class="fixed inset-0 bg-black/85 z-50 hidden items-center justify-center p-4"
+       onclick="if(event.target===this)closeFilmstrip()">
+    <div class="bg-gray-900 rounded-2xl p-5 w-full max-w-5xl shadow-2xl">
+      <div class="flex justify-between items-start mb-4">
+        <div>
+          <p id="filmstrip-video-label" class="text-gray-400 text-xs mb-1"></p>
+          <div id="filmstrip-legend" class="flex items-center gap-2"></div>
+        </div>
+        <button onclick="closeFilmstrip()" class="text-gray-400 hover:text-white text-2xl leading-none ml-4">×</button>
+      </div>
+      <div class="flex flex-col gap-3">
+        <div>
+          <p class="text-xs text-gray-500 uppercase tracking-wider mb-2">Earlier history <span class="text-gray-600">(t−9 … t−5)</span></p>
+          <div id="filmstrip-row1" class="grid gap-2" style="grid-template-columns: repeat(5, 1fr)"></div>
+        </div>
+        <div>
+          <p class="text-xs text-gray-500 uppercase tracking-wider mb-2">Recent history → <span class="text-white font-semibold">current frame</span> <span class="text-gray-600">(t−4 … t=0)</span></p>
+          <div id="filmstrip-row2" class="grid gap-2" style="grid-template-columns: repeat(5, 1fr)"></div>
+        </div>
+        <div>
+          <p class="text-xs text-gray-500 uppercase tracking-wider mb-2">Future progression <span class="text-gray-600">(t+1 … t+5)</span></p>
+          <div id="filmstrip-row3" class="grid gap-2" style="grid-template-columns: repeat(5, 1fr)"></div>
+        </div>
+      </div>
+    </div>
   </div>
 
 <script>
@@ -181,6 +279,9 @@
   let dashboardData = [];
   let dashboardTotals = { frames: 0, video_items: 0 };
   let activeFilter = null;
+  let selectedModels = [];  // [{model, split, color}]
+  const MODEL_PALETTE = ['#7c3aed', '#0891b2', '#059669', '#d97706', '#e11d48', '#6366f1'];
+  let _modelColorIdx = 0;
 
   // Video task state
   let currentVideoItems = [];   // all visible items across sections (for modal navigation)
@@ -211,18 +312,43 @@
     if (video) p.set('video', video);
     p.set('n', document.getElementById('n-input').value);
     if (activeFilter) p.set('filter', activeFilter);
+    for (const m of selectedModels) { p.append('model', m.model); p.append('split', m.split); }
     history.replaceState(null, '', '?' + p.toString());
   }
 
   function getState() {
     const p = new URLSearchParams(location.search);
+    const models = p.getAll('model');
+    const splits = p.getAll('split');
     return {
       task:    p.get('task'),
       dataset: p.get('dataset'),
       video:   p.get('video'),
       n:       p.get('n'),
       filter:  p.get('filter'),
+      models:  models.map((m, i) => ({ model: m, split: splits[i] || '' })),
     };
+  }
+
+  let _autoRefreshInterval = null;
+  let _currentTaskKey = null;
+
+  function _startAutoRefresh() {
+    if (_autoRefreshInterval) clearInterval(_autoRefreshInterval);
+    _autoRefreshInterval = setInterval(async () => {
+      if (_currentTaskKey) {
+        // Silently refresh leaderboard
+        const resp = await fetch(`/api/leaderboard?task=${_currentTaskKey}`);
+        if (!resp.ok) return;
+        const fresh = await resp.json();
+        if (fresh.length === 0) return;
+        _leaderboardData = fresh;
+        _renderLeaderboard();
+      } else {
+        // Silently refresh radar (home view)
+        loadRadars();
+      }
+    }, 60000);
   }
 
   async function init() {
@@ -237,11 +363,16 @@
     dashboardData = dashResp2.entries;
     dashboardTotals = dashResp2.totals;
     renderTaskList();
+    loadRadars();  // async, non-blocking
+    _startAutoRefresh();
 
     // Restore state from URL if present
     const state = getState();
     if (state.task) {
       if (state.n) document.getElementById('n-input').value = state.n;
+      for (const m of state.models) {
+        selectedModels.push({ ...m, color: _lbColor(m.model) });
+      }
       await selectTask(state.task, state.dataset, state.video, state.filter);
     } else {
       document.querySelector('[data-task="__home__"]')?.classList.add('active');
@@ -251,9 +382,402 @@
 
   let dashActiveDataset = null;
 
+  // ── Radar charts ──────────────────────────────────────────────────────────
+  const TASK_KEYWORDS = ['phase','tool','action','skill','error','gesture','triplet','cvs','maneuver','anatomy','object','detection','planning'];
+  const RADAR_TASK_LABELS = {
+    phase_recognition:      'Phase Recog.',
+    tool_recognition:       'Tool Recog.',
+    action_recognition:     'Action Recog.',
+    triplet_recognition:    'Triplet Recog.',
+    object_detection:       'Object Det. (bbox)',
+    cvs_assessment:         'CVS Assess.',
+    skill_assessment:       'Skill Assess.',
+    gesture_classification: 'Gesture Class.',
+    maneuver_classification:'Maneuver Class.',
+    error_recognition:      'Error Recog.',
+    error_detection:        'Error Det.',
+    phase_planning:         'Phase Plan.',
+  };
+
+  let _radarMetric = 'accuracy';
+  let _radarData = null;
+  let _selectedRadarModels = new Set();
+
+  function _taskType(key) {
+    const parts = key.split('_');
+    const idx = parts.findIndex(p => TASK_KEYWORDS.includes(p));
+    return idx >= 0 ? parts.slice(idx).join('_') : key;
+  }
+
+  function _processAllLb(allLb) {
+    // model → taskType → {acc: [values], wf1: [values]}
+    const raw = {};
+    for (const [taskKey, entries] of Object.entries(allLb)) {
+      const taskType = _taskType(taskKey);
+      for (const entry of entries) {
+        const m = entry.model;
+        const mt   = entry.metric_type;
+        const acc  = mt === 'phase_planning'
+                       ? (entry.overall?.next_acc  ?? null)
+                       : mt === 'phase_easy'
+                       ? (entry.overall?.accuracy  ?? null)
+                       : (entry.overall?.accuracy  ?? null);
+        const wf1  = entry.overall?.weighted_f1 ?? null;
+        if (!raw[m]) raw[m] = {};
+        if (!raw[m][taskType]) raw[m][taskType] = { acc: [], wf1: [] };
+        if (acc  !== null) raw[m][taskType].acc.push(acc);
+        if (wf1  !== null) raw[m][taskType].wf1.push(wf1);
+      }
+    }
+    // Average across datasets
+    const result = {};
+    for (const [m, taskMap] of Object.entries(raw)) {
+      result[m] = {};
+      for (const [tt, vals] of Object.entries(taskMap)) {
+        result[m][tt] = {
+          acc:  vals.acc.length  ? vals.acc.reduce((a,b) => a+b) / vals.acc.length  : null,
+          wf1:  vals.wf1.length  ? vals.wf1.reduce((a,b) => a+b) / vals.wf1.length : null,
+        };
+      }
+    }
+    return result;
+  }
+
+  function _buildRadarSVG(axes, modelData, metric) {
+    const N = axes.length;
+    if (N < 3) return null;
+    const W = 420, R = 140, labelR = R + 28;
+    const angles = axes.map((_, i) => -Math.PI / 2 + i * 2 * Math.PI / N);
+
+    // Tight viewBox: axis i=0 always points straight up, so top content = cy - labelR.
+    // Fix top padding at 12px, then compute H from actual bottom label extent.
+    const PAD = 12;
+    const cy = labelR + PAD;  // ensures top label sits at y = PAD
+    const maxSinDown = Math.max(...angles.map(a => Math.sin(a)));
+    const H = Math.ceil(cy + labelR * maxSinDown + PAD);
+    const cx = W / 2;
+    const ns = 'http://www.w3.org/2000/svg';
+
+    const svg = document.createElementNS(ns, 'svg');
+    svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    svg.setAttribute('class', 'w-full');
+
+    // Grid rings
+    [0.25, 0.5, 0.75, 1.0].forEach(level => {
+      const pts = angles.map(a =>
+        `${(cx + R * level * Math.cos(a)).toFixed(1)},${(cy + R * level * Math.sin(a)).toFixed(1)}`
+      ).join(' ');
+      const poly = document.createElementNS(ns, 'polygon');
+      poly.setAttribute('points', pts);
+      poly.setAttribute('fill', 'none');
+      poly.setAttribute('stroke', level === 1 ? '#d1d5db' : '#e5e7eb');
+      poly.setAttribute('stroke-width', level === 1 ? '1' : '0.75');
+      svg.appendChild(poly);
+      // Level label at top
+      const lbl = document.createElementNS(ns, 'text');
+      lbl.setAttribute('x', cx);
+      lbl.setAttribute('y', cy - R * level - 3);
+      lbl.setAttribute('text-anchor', 'middle');
+      lbl.setAttribute('font-size', '9');
+      lbl.setAttribute('fill', '#9ca3af');
+      lbl.textContent = (level * 100).toFixed(0);
+      svg.appendChild(lbl);
+    });
+
+    // Axis lines + labels
+    angles.forEach((a, i) => {
+      const x2 = cx + R * Math.cos(a), y2 = cy + R * Math.sin(a);
+      const line = document.createElementNS(ns, 'line');
+      line.setAttribute('x1', cx); line.setAttribute('y1', cy);
+      line.setAttribute('x2', x2.toFixed(1)); line.setAttribute('y2', y2.toFixed(1));
+      line.setAttribute('stroke', '#e5e7eb'); line.setAttribute('stroke-width', '0.75');
+      svg.appendChild(line);
+
+      const lx = cx + labelR * Math.cos(a), ly = cy + labelR * Math.sin(a);
+      const text = document.createElementNS(ns, 'text');
+      text.setAttribute('x', lx.toFixed(1)); text.setAttribute('y', ly.toFixed(1));
+      text.setAttribute('text-anchor', 'middle'); text.setAttribute('dominant-baseline', 'middle');
+      text.setAttribute('font-size', '11'); text.setAttribute('fill', '#6b7280');
+      text.setAttribute('font-weight', '500');
+      text.textContent = axes[i].label;
+      svg.appendChild(text);
+    });
+
+    // Model polygons — one pass per model keeps fill+stroke refs for hover-scale
+    const models = Object.keys(modelData).sort();
+    const metricKey = metric === 'accuracy' ? 'acc' : 'wf1';
+
+    const makePoints = (vals, scale) => vals.map((v, i) => {
+      const r = (v ?? 0) * scale;
+      return `${(cx + R * r * Math.cos(angles[i])).toFixed(1)},${(cy + R * r * Math.sin(angles[i])).toFixed(1)}`;
+    }).join(' ');
+
+    models.forEach(model => {
+      const color = _lbColorCache[model] || '#aaa';
+      const vals = axes.map(ax => modelData[model]?.[ax.taskType]?.[metricKey] ?? null);
+      if (vals.every(v => v === null)) return;
+
+      const fillPoly = document.createElementNS(ns, 'polygon');
+      fillPoly.setAttribute('points', makePoints(vals, 1));
+      fillPoly.setAttribute('fill', color + '12');
+      fillPoly.setAttribute('stroke', 'none');
+      svg.appendChild(fillPoly);
+
+      const strokePoly = document.createElementNS(ns, 'polygon');
+      strokePoly.setAttribute('points', makePoints(vals, 1));
+      strokePoly.setAttribute('fill', 'none');
+      strokePoly.setAttribute('stroke', color);
+      strokePoly.setAttribute('stroke-width', '2');
+      svg.appendChild(strokePoly);
+
+      vals.forEach((v, i) => {
+        if (v === null) return;
+        const dot = document.createElementNS(ns, 'circle');
+        dot.setAttribute('cx', (cx + R * v * Math.cos(angles[i])).toFixed(1));
+        dot.setAttribute('cy', (cy + R * v * Math.sin(angles[i])).toFixed(1));
+        dot.setAttribute('r', '3.5'); dot.setAttribute('fill', color);
+        dot.style.cursor = 'crosshair';
+        const axisLabel = axes[i].label;
+        const valPct = (v * 100).toFixed(1);
+        dot.addEventListener('mouseenter', () => {
+          fillPoly.setAttribute('points', makePoints(vals, 1.06));
+          strokePoly.setAttribute('points', makePoints(vals, 1.06));
+          strokePoly.setAttribute('stroke-width', '2.5');
+        });
+        dot.addEventListener('mousemove', (e) => {
+          const tt = document.getElementById('radar-tooltip');
+          tt.textContent = `${model} · ${axisLabel}: ${valPct}%`;
+          tt.style.left = (e.clientX + 14) + 'px';
+          tt.style.top = (e.clientY - 32) + 'px';
+          tt.classList.remove('hidden');
+        });
+        dot.addEventListener('mouseleave', () => {
+          fillPoly.setAttribute('points', makePoints(vals, 1));
+          strokePoly.setAttribute('points', makePoints(vals, 1));
+          strokePoly.setAttribute('stroke-width', '2');
+          document.getElementById('radar-tooltip').classList.add('hidden');
+        });
+        svg.appendChild(dot);
+      });
+    });
+
+    return svg;
+  }
+
+  function _renderRadarTable(axes, modelData, metric, containerId) {
+    const container = document.getElementById(containerId);
+    container.innerHTML = '';
+    if (!axes.length) return;
+
+    const metricKey = metric === 'accuracy' ? 'acc' : 'wf1';
+    const allModels = Object.keys(modelData).filter(m => _selectedRadarModels.has(m));
+    if (!allModels.length) return;
+
+    // Compute per-model avg across axes that have a value
+    const avgOf = (model) => {
+      const vals = axes.map(ax => modelData[model]?.[ax.taskType]?.[metricKey]).filter(v => v != null);
+      return vals.length ? vals.reduce((a, b) => a + b) / vals.length : null;
+    };
+
+    // Sort state: { col: 'avg'|taskType|'model', dir: 1|-1 }
+    let sortState = { col: 'avg', dir: -1 };
+
+    const rerender = () => {
+      // Sort models
+      const sorted = [...allModels].sort((a, b) => {
+        let va, vb;
+        if (sortState.col === 'model') {
+          return sortState.dir * a.localeCompare(b);
+        } else if (sortState.col === 'avg') {
+          va = avgOf(a) ?? -Infinity; vb = avgOf(b) ?? -Infinity;
+        } else {
+          va = modelData[a]?.[sortState.col]?.[metricKey] ?? -Infinity;
+          vb = modelData[b]?.[sortState.col]?.[metricKey] ?? -Infinity;
+        }
+        return sortState.dir * (va - vb);
+      });
+
+      // Best per column (incl avg)
+      const best = {};
+      axes.forEach(ax => {
+        const vals = allModels.map(m => modelData[m]?.[ax.taskType]?.[metricKey]).filter(v => v != null);
+        best[ax.taskType] = vals.length ? Math.max(...vals) : null;
+      });
+      const avgVals = allModels.map(m => avgOf(m)).filter(v => v != null);
+      best['avg'] = avgVals.length ? Math.max(...avgVals) : null;
+
+      container.innerHTML = '';
+      const table = document.createElement('table');
+      table.className = 'w-full text-xs border-collapse';
+
+      // Header
+      const thead = document.createElement('thead');
+      const hrow = document.createElement('tr');
+
+      const makeHeader = (label, colKey, extraClass = 'text-center') => {
+        const th = document.createElement('th');
+        const isActive = sortState.col === colKey;
+        const arrow = isActive ? (sortState.dir === -1 ? ' ↓' : ' ↑') : '';
+        th.className = `${extraClass} py-1.5 px-2 font-medium border-b border-gray-100 cursor-pointer select-none whitespace-nowrap ${isActive ? 'text-blue-500' : 'text-gray-400'} hover:text-blue-400`;
+        th.textContent = label + arrow;
+        th.addEventListener('click', () => {
+          if (sortState.col === colKey) sortState.dir *= -1;
+          else sortState = { col: colKey, dir: colKey === 'model' ? 1 : -1 };
+          rerender();
+        });
+        return th;
+      };
+
+      hrow.appendChild(makeHeader('Model', 'model', 'text-left'));
+      axes.forEach(ax => hrow.appendChild(makeHeader(ax.label, ax.taskType)));
+      hrow.appendChild(makeHeader('Avg', 'avg'));
+      thead.appendChild(hrow);
+      table.appendChild(thead);
+
+      // Rows
+      const tbody = document.createElement('tbody');
+      sorted.forEach((model, ri) => {
+        const color = _lbColorCache[model] || '#aaa';
+        const tr = document.createElement('tr');
+        tr.className = ri % 2 === 0 ? 'bg-white' : 'bg-gray-50';
+
+        // Model name — no truncation
+        const td0 = document.createElement('td');
+        td0.className = 'py-1.5 px-2 font-medium text-gray-700 whitespace-nowrap';
+        td0.innerHTML = `<span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${color};margin-right:5px;vertical-align:middle;flex-shrink:0"></span>${model}`;
+        tr.appendChild(td0);
+
+        axes.forEach(ax => {
+          const v = modelData[model]?.[ax.taskType]?.[metricKey];
+          const isBest = v != null && best[ax.taskType] != null && Math.abs(v - best[ax.taskType]) < 1e-6;
+          const td = document.createElement('td');
+          td.className = `text-center py-1.5 px-2 tabular-nums ${isBest ? 'font-bold text-green-600' : 'text-gray-600'}`;
+          td.textContent = v != null ? (v * 100).toFixed(1) : '—';
+          tr.appendChild(td);
+        });
+
+        // Avg column
+        const avg = avgOf(model);
+        const isBestAvg = avg != null && best['avg'] != null && Math.abs(avg - best['avg']) < 1e-6;
+        const tdAvg = document.createElement('td');
+        tdAvg.className = `text-center py-1.5 px-2 tabular-nums border-l border-gray-100 ${isBestAvg ? 'font-bold text-green-600' : 'text-gray-500'}`;
+        tdAvg.textContent = avg != null ? (avg * 100).toFixed(1) : '—';
+        tr.appendChild(tdAvg);
+
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+      container.appendChild(table);
+    };
+
+    rerender();
+  }
+
+  function _renderRadars(metric) {
+    if (!_radarData) return;
+    const { modelData, allAxes } = _radarData;
+
+    // Filter to selected models
+    const filteredData = {};
+    for (const [m, v] of Object.entries(modelData)) {
+      if (_selectedRadarModels.has(m)) filteredData[m] = v;
+    }
+
+    const svgContainer = document.getElementById('radar-svg');
+    svgContainer.innerHTML = '';
+    if (allAxes.length < 3) {
+      svgContainer.innerHTML = '<p class="text-xs text-gray-400 py-4 text-center">Not enough tasks with metrics</p>';
+    } else {
+      const svg = _buildRadarSVG(allAxes, filteredData, metric);
+      if (svg) svgContainer.appendChild(svg);
+    }
+    _renderRadarTable(allAxes, filteredData, metric, 'radar-table');
+  }
+
+  function _renderModelToggles(allModels) {
+    const container = document.getElementById('radar-model-toggles');
+    container.innerHTML = '';
+    allModels.forEach(model => {
+      const color = _lbColorCache[model] || '#aaa';
+      const active = _selectedRadarModels.has(model);
+      const btn = document.createElement('button');
+      btn.dataset.model = model;
+      btn.className = 'radar-model-toggle px-3 py-1 rounded-full text-xs font-medium border transition flex items-center gap-1.5';
+      btn.style.cssText = active
+        ? `background:${color};color:white;border-color:${color}`
+        : `background:white;color:${color};border-color:${color}`;
+      btn.innerHTML = `<span style="width:7px;height:7px;border-radius:50%;background:${active ? 'white' : color};display:inline-block"></span>${model}`;
+      btn.addEventListener('click', () => {
+        if (_selectedRadarModels.has(model)) {
+          if (_selectedRadarModels.size > 1) _selectedRadarModels.delete(model);
+        } else {
+          _selectedRadarModels.add(model);
+        }
+        _renderModelToggles(allModels);
+        _renderRadars(_radarMetric);
+      });
+      container.appendChild(btn);
+    });
+  }
+
+  async function loadRadars() {
+    const resp = await fetch('/api/all_leaderboard');
+    if (!resp.ok) return;
+    const allLb = await resp.json();
+    if (!Object.keys(allLb).length) return;
+
+    // Pre-populate _lbColorCache with all models in alphabetical order
+    const allModels = [...new Set(Object.values(allLb).flatMap(entries => entries.map(e => e.model)))].sort();
+    allModels.forEach(m => _lbColor(m));
+
+    const modelData = _processAllLb(allLb);
+
+    // All models selected by default
+    _selectedRadarModels = new Set(allModels);
+
+    // Determine which task types have data
+    const taskTypes = new Set();
+    for (const taskMap of Object.values(modelData)) {
+      for (const tt of Object.keys(taskMap)) taskTypes.add(tt);
+    }
+
+    const frameTaskTypes = new Set(dashboardData.filter(e => e.granularity === 'frame').map(e => e.task_type));
+    const videoTaskTypes = new Set(dashboardData.filter(e => e.granularity === 'video').map(e => e.task_type));
+
+    const makeAxes = (typeSet, emoji) => [...taskTypes]
+      .filter(tt => typeSet.has(tt))
+      .sort()
+      .map(tt => ({ taskType: tt, label: emoji + ' ' + (RADAR_TASK_LABELS[tt] || formatTaskName(tt)) }));
+
+    const allAxes = [...makeAxes(frameTaskTypes, '🖼️'), ...makeAxes(videoTaskTypes, '🎥')];
+    _radarData = { modelData, allAxes };
+
+    document.getElementById('radar-section').classList.remove('hidden');
+    _renderModelToggles(allModels);
+    _renderRadars(_radarMetric);
+
+    // Metric pill listeners
+    document.querySelectorAll('.radar-pill').forEach(btn => {
+      btn.addEventListener('click', () => {
+        _radarMetric = btn.dataset.metric;
+        document.querySelectorAll('.radar-pill').forEach(b => {
+          const active = b.dataset.metric === _radarMetric;
+          b.className = `radar-pill px-3 py-1 rounded-full text-xs font-medium transition ${
+            active ? 'bg-white shadow text-gray-700' : 'text-gray-400'
+          }`;
+        });
+        _renderRadars(_radarMetric);
+      });
+    });
+  }
+
   function showDashboard() {
+    _currentTaskKey = null;
     document.getElementById('dashboard').classList.remove('hidden');
     document.getElementById('empty-state').classList.add('hidden');
+    document.getElementById('samples-row').classList.add('hidden');
+    document.getElementById('view-section').classList.add('hidden');
+    document.getElementById('leaderboard-section').classList.add('hidden');
     document.getElementById('dataset-section').classList.add('hidden');
     document.getElementById('prompt-section').classList.add('hidden');
     document.getElementById('video-section').classList.add('hidden');
@@ -264,7 +788,7 @@
     document.getElementById('timeline-section').classList.add('hidden');
     document.getElementById('video-player-section').classList.add('hidden');
     document.getElementById('action-histogram-section').classList.add('hidden');
-    document.getElementById('n-input').closest('div').classList.remove('hidden');
+    document.getElementById('triplet-dist-section').classList.add('hidden');
 
     // Totals
     const totalsDiv = document.getElementById('dash-totals');
@@ -389,10 +913,17 @@
 
   // ── Task selection ───────────────────────────────────────────────────────
   async function selectTask(taskType, restoreDataset, restoreVideo, restoreFilter) {
+    _currentTaskKey = taskType;
     selectedTask = taskType;
     selectedDataset = null;
-    // Reset sample count to 20 when switching tasks (unless restoring from URL)
-    if (!restoreDataset) document.getElementById('n-input').value = '20';
+    // Reset sample count and model selection when switching tasks (unless restoring from URL)
+    if (!restoreDataset) {
+      document.getElementById('n-input').value = '20';
+      selectedModels = [];
+      _modelColorIdx = 0;
+    }
+    document.getElementById('view-section').classList.add('hidden');
+    document.getElementById('leaderboard-section').classList.add('hidden');
 
     // Update sidebar active
     document.querySelectorAll('.task-tab').forEach(b => {
@@ -426,11 +957,20 @@
     document.getElementById('video-task-section').classList.add('hidden');
     document.getElementById('video-task-section').innerHTML = '';
     document.getElementById('frame-grid').innerHTML = '';
+    document.getElementById('frame-grid').classList.remove('hidden');
+    document.getElementById('planning-section').classList.add('hidden');
+    document.getElementById('planning-grid').innerHTML = '';
     document.getElementById('video-section').classList.add('hidden');
     document.getElementById('prompt-section').classList.add('hidden');
+    document.getElementById('timeline-section').classList.add('hidden');
+    document.getElementById('video-player-section').classList.add('hidden');
+    document.getElementById('action-histogram-section').classList.add('hidden');
+    document.getElementById('triplet-dist-section').classList.add('hidden');
+    document.getElementById('filter-section').classList.add('hidden');
+    document.getElementById('samples-row').classList.add('hidden');
+    document.getElementById('vtrb-fewshot-section').classList.add('hidden');
+    document.getElementById('vtrb-phase-section').classList.add('hidden');
     document.getElementById('empty-state').classList.remove('hidden');
-    // Restore samples row visibility (may have been hidden by video task)
-    document.getElementById('n-input').closest('div').classList.remove('hidden');
 
     const targetDataset = restoreDataset && datasets.includes(restoreDataset) ? restoreDataset : datasets[0];
     if (targetDataset) selectDataset(taskType, targetDataset, restoreVideo, restoreFilter);
@@ -439,8 +979,10 @@
   function formatDatasetName(ds) {
     const MAP = {
       heichole: 'HeiChole', cholec80: 'Cholec80', avos: 'AVOS', endoscapes: 'Endoscapes',
-      jigsaws: 'JIGSAWS', cholect45: 'CholecT45', endoscapes: 'Endoscapes',
+      jigsaws: 'JIGSAWS', knot_tying: 'Knot Tying', needle_passing: 'Needle Passing', suturing: 'Suturing',
+      cholect45: 'CholecT45', cholect50: 'CholecT50', endoscapes: 'Endoscapes',
       multibypass140: 'MultiBypass140', autolaparo: 'AutoLaparo', dresden: 'Dresden',
+      vtrb_suturing: 'VTRB Suturing',
     };
     return MAP[ds] || ds.replace(/\b\w/g, c => c.toUpperCase());
   }
@@ -486,9 +1028,465 @@
     document.getElementById('prompt-text').textContent = promptData[model] ?? '';
   }
 
+  // ── Leaderboard ──────────────────────────────────────────────────────────
+  let _leaderboardData = [];
+  let _leaderboardPerClass = false;
+  let _leaderboardSortKey = 'weighted_f1';
+  let _leaderboardSortDir = 'desc';
+  let _leaderboardBarMetric = 'weighted_f1';
+
+  const _LB_COLS_DEFAULT = [
+    { key: 'accuracy',     label: 'Acc',     get: o => o.accuracy },
+    { key: 'weighted_f1',  label: 'W-F1',    get: o => o.weighted_f1 },
+    { key: 'f1',           label: 'Avg-F1',  get: o => o.f1 },
+    { key: 'recall',       label: 'Avg-Rec', get: o => o.recall },
+    { key: 'precision',    label: 'Avg-Pre', get: o => o.precision },
+  ];
+  const _LB_COLS_BBOX = [
+    { key: 'accuracy',     label: 'mIoU@0.5',  get: o => o.accuracy },
+    { key: 'weighted_f1',  label: 'mF1@0.5',   get: o => o.weighted_f1 },
+    { key: 'recall',       label: 'Rec@0.5',   get: o => o.recall },
+    { key: 'precision',    label: 'Prec@0.5',  get: o => o.precision },
+  ];
+  const _LB_COLS_SKILL = [
+    { key: 'accuracy', label: 'Acc (EM)', fmt: v => v == null ? '—' : (v * 100).toFixed(1) + '%', get: o => o.accuracy },
+    { key: 'mae',      label: 'MAE ↓',   fmt: v => v == null ? '—' : v.toFixed(3),               get: o => o.mae      },
+    { key: 'spearman', label: 'Spearman ρ', fmt: v => v == null ? '—' : v.toFixed(3),            get: o => o.spearman },
+  ];
+  const _LB_COLS_TRIPLET = [
+    { key: 'accuracy',       label: 'Mean Acc',  get: o => o.accuracy },
+    { key: 'instrument_acc', label: 'Inst Acc',  get: o => o.instrument_acc },
+    { key: 'verb_acc',       label: 'Verb Acc',  get: o => o.verb_acc },
+    { key: 'target_acc',     label: 'Tgt Acc',   get: o => o.target_acc },
+    { key: 'f1',             label: 'Mean F1',   get: o => o.f1 },
+    { key: 'instrument_f1',  label: 'Inst F1',   get: o => o.instrument_f1 },
+    { key: 'verb_f1',        label: 'Verb F1',   get: o => o.verb_f1 },
+    { key: 'target_f1',      label: 'Tgt F1',    get: o => o.target_f1 },
+    { key: 'recall',         label: 'Avg-Rec',   get: o => o.recall },
+    { key: 'precision',      label: 'Avg-Pre',   get: o => o.precision },
+  ];
+  const _LB_COLS_PHASE_EASY = [
+    { key: 'accuracy', label: 'Accuracy', get: o => o.accuracy },
+    { key: 'correct',  label: 'Correct',  get: o => o.correct,  fmt: v => v == null ? '—' : v },
+    { key: 'total',    label: 'Total',    get: o => o.total,    fmt: v => v == null ? '—' : v },
+  ];
+  const _LB_COLS_PHASE_PLANNING = [
+    { key: 'both_acc', label: 'Both Acc',  get: o => o.both_acc },
+    { key: 'curr_acc', label: 'Curr Acc',  get: o => o.curr_acc },
+    { key: 'next_acc', label: 'Next Acc',  get: o => o.next_acc },
+    { key: 'total',    label: 'Total',     get: o => o.total, fmt: v => v == null ? '—' : v },
+  ];
+  let _LB_COLS = _LB_COLS_DEFAULT;
+
+  async function loadLeaderboard(taskKey) {
+    const sec = document.getElementById('leaderboard-section');
+    const resp = await fetch(`/api/leaderboard?task=${taskKey}`);
+    _leaderboardData = await resp.json();
+    if (_leaderboardData.length === 0) { sec.classList.add('hidden'); return; }
+    const mt = _leaderboardData[0]?.metric_type;
+    if (mt === 'bbox')         _LB_COLS = _LB_COLS_BBOX;
+    else if (mt === 'skill')   _LB_COLS = _LB_COLS_SKILL;
+    else if (mt === 'triplet') _LB_COLS = _LB_COLS_TRIPLET;
+    else if (mt === 'phase_easy')     _LB_COLS = _LB_COLS_PHASE_EASY;
+    else if (mt === 'phase_planning') _LB_COLS = _LB_COLS_PHASE_PLANNING;
+    else                              _LB_COLS = _LB_COLS_DEFAULT;
+    _leaderboardSortKey = _LB_COLS[0].key; _leaderboardSortDir = 'desc';
+    _leaderboardBarMetric = _LB_COLS[0].key;
+    sec.classList.remove('hidden');
+    _renderLeaderboard();
+  }
+
+  function toggleLeaderboardPerClass() {
+    _leaderboardPerClass = !_leaderboardPerClass;
+    const btn = document.getElementById('leaderboard-perclass-btn');
+    btn.className = `text-xs px-2 py-0.5 rounded border transition ${
+      _leaderboardPerClass ? 'bg-gray-700 text-white border-gray-700'
+                           : 'border-gray-300 text-gray-500 hover:border-gray-400 hover:text-gray-700'}`;
+    _renderLeaderboard();
+  }
+
+  function _lbSort(key) {
+    if (_leaderboardSortKey === key) _leaderboardSortDir = _leaderboardSortDir === 'desc' ? 'asc' : 'desc';
+    else { _leaderboardSortKey = key; _leaderboardSortDir = 'desc'; }
+    _renderLeaderboard();
+  }
+
+  function _lbBarMetric(key) { _leaderboardBarMetric = key; _renderLeaderboard(); }
+
+  function _pct(v) { return v == null ? '—' : (v * 100).toFixed(1) + '%'; }
+
+  // Assign a stable color per model name
+  const _LB_COLORS = ['#3b82f6','#f59e0b','#10b981','#ef4444','#8b5cf6','#ec4899','#06b6d4','#84cc16','#f97316','#6366f1'];
+  const _lbColorCache = {};
+  let _lbColorNext = 0;
+  function _lbColor(model) {
+    if (!_lbColorCache[model]) { _lbColorCache[model] = _LB_COLORS[_lbColorNext++ % _LB_COLORS.length]; }
+    return _lbColorCache[model];
+  }
+
+  function _renderVtrbSubtaskDist() {
+    const el = document.getElementById('vtrb-phase-dist');
+    if (!el || !_vtrbPhaseData || !_leaderboardData.length) { el?.classList.add('hidden'); return; }
+    const counts = _vtrbPhaseData.subtask_counts || {};
+    if (!Object.keys(counts).length) { el.classList.add('hidden'); return; }
+
+    const models = [..._leaderboardData].sort((a, b) => b.overall.accuracy - a.overall.accuracy);
+    const subtasks = Object.keys(counts).sort();
+    const maxCount = Math.max(...Object.values(counts), 1);
+
+    el.innerHTML = '';
+    el.className = 'mb-2 bg-white border border-gray-100 rounded-xl overflow-hidden';
+
+    const hdr = document.createElement('div');
+    hdr.className = 'px-3 py-2 border-b border-gray-100';
+    hdr.innerHTML = `<span class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Phase Distribution</span>`;
+    el.appendChild(hdr);
+
+    // Render model legend below the dist chart
+    const legendEl = document.getElementById('vtrb-phase-model-legend');
+    if (legendEl) {
+      legendEl.innerHTML = '';
+      models.forEach(m => {
+        const item = document.createElement('span');
+        item.className = 'flex items-center gap-1.5 text-xs font-medium';
+        item.innerHTML = `<span style="width:10px;height:10px;border-radius:3px;background:${_lbColor(m.model)};display:inline-block;flex-shrink:0"></span>
+          <span style="color:${_lbColor(m.model)}">${m.model}</span>`;
+        legendEl.appendChild(item);
+      });
+      legendEl.classList.remove('hidden');
+    }
+
+    const body = document.createElement('div');
+    body.className = 'divide-y divide-gray-50';
+    subtasks.forEach(st => {
+      const cnt = counts[st] || 0;
+      const row = document.createElement('div');
+      row.className = 'grid items-center gap-2 px-3 py-1.5';
+      row.style.gridTemplateColumns = `1fr 80px ${models.map(() => '44px').join(' ')}`;
+
+      const name = document.createElement('span');
+      name.className = 'text-xs text-gray-600 truncate';
+      name.title = st;
+      name.textContent = st;
+
+      const countBar = document.createElement('div');
+      countBar.className = 'flex items-center gap-1.5';
+      const bar = document.createElement('div');
+      bar.className = 'flex-1 bg-gray-100 rounded-full overflow-hidden h-2';
+      const fill = document.createElement('div');
+      fill.className = 'h-full rounded-full bg-gray-400';
+      fill.style.width = `${(cnt / maxCount) * 100}%`;
+      bar.appendChild(fill);
+      const num = document.createElement('span');
+      num.className = 'text-xs text-gray-400 w-5 text-right flex-shrink-0';
+      num.textContent = cnt;
+      countBar.appendChild(bar);
+      countBar.appendChild(num);
+
+      row.appendChild(name);
+      row.appendChild(countBar);
+
+      models.forEach(m => {
+        const pc = m.per_class?.find(c => c.class === st);
+        const acc = pc?.accuracy ?? null;
+        const cell = document.createElement('div');
+        cell.className = 'text-center text-xs font-mono';
+        cell.style.color = acc === null ? '#9ca3af' : acc >= 0.5 ? '#059669' : acc >= 0.25 ? '#d97706' : '#dc2626';
+        cell.textContent = acc === null ? '—' : `${(acc * 100).toFixed(0)}%`;
+        row.appendChild(cell);
+      });
+
+      body.appendChild(row);
+    });
+    el.appendChild(body);
+    el.classList.remove('hidden');
+  }
+
+  function _renderLeaderboard() {
+    const container = document.getElementById('leaderboard-table');
+    container.innerHTML = '';
+
+    // Sort data
+    const col = _LB_COLS.find(c => c.key === _leaderboardSortKey);
+    const sorted = [..._leaderboardData].sort((a, b) => {
+      const av = col ? (col.get(a.overall) ?? -1) : -1;
+      const bv = col ? (col.get(b.overall) ?? -1) : -1;
+      return _leaderboardSortDir === 'desc' ? bv - av : av - bv;
+    });
+
+    if (!_leaderboardPerClass) {
+      // ── Bar chart (single metric, sorted by that metric) ──
+      const barMetricCol = _LB_COLS.find(c => c.key === _leaderboardBarMetric) ?? _LB_COLS[0];
+      const barSorted = [..._leaderboardData].sort((a, b) =>
+        (barMetricCol.get(b.overall) ?? -1) - (barMetricCol.get(a.overall) ?? -1)
+      );
+      const maxVal = Math.max(...barSorted.map(e => barMetricCol.get(e.overall) ?? 0), 0.01);
+
+      const chartDiv = document.createElement('div');
+      chartDiv.className = 'p-4 border-b border-gray-100';
+
+      // Metric selector pills
+      const pills = document.createElement('div');
+      pills.className = 'flex gap-1.5 mb-3 flex-wrap';
+      for (const c of _LB_COLS) {
+        const p = document.createElement('button');
+        const active = c.key === _leaderboardBarMetric;
+        p.className = `text-xs px-2.5 py-0.5 rounded-full border transition font-medium ${
+          active ? 'bg-gray-800 text-white border-gray-800' : 'border-gray-300 text-gray-500 hover:border-gray-500'}`;
+        p.textContent = c.label;
+        p.onclick = () => _lbBarMetric(c.key);
+        pills.appendChild(p);
+      }
+      chartDiv.appendChild(pills);
+
+      for (const entry of barSorted) {
+        const modelLabel = entry.split !== 'deleteme_for_pub' ? `${entry.model} (${entry.split})` : entry.model;
+        const val = barMetricCol.get(entry.overall) ?? 0;
+        const pct = val / maxVal * 100;
+        const color = _lbColor(entry.model);
+
+        const row = document.createElement('div');
+        row.className = 'flex items-center gap-2 mb-1.5';
+
+        const lbl = document.createElement('span');
+        lbl.className = 'text-xs text-gray-600 shrink-0 text-right';
+        lbl.style.width = '160px';
+        lbl.title = modelLabel;
+        lbl.textContent = modelLabel.length > 22 ? modelLabel.slice(0, 21) + '…' : modelLabel;
+
+        const barWrap = document.createElement('div');
+        barWrap.className = 'flex-1 bg-gray-100 rounded-sm h-5 overflow-hidden';
+        const bar = document.createElement('div');
+        bar.className = 'h-full rounded-sm flex items-center justify-end pr-1';
+        bar.style.cssText = `width:${pct}%; background:${color}; min-width:${val > 0 ? 2 : 0}px`;
+
+        const valLbl = document.createElement('span');
+        valLbl.className = 'text-xs font-mono text-white font-semibold leading-none';
+        valLbl.textContent = barMetricCol.fmt ? barMetricCol.fmt(val) : _pct(val);
+        bar.appendChild(valLbl);
+        barWrap.appendChild(bar);
+
+        row.appendChild(lbl);
+        row.appendChild(barWrap);
+        chartDiv.appendChild(row);
+      }
+      container.appendChild(chartDiv);
+
+      // ── Table header ──
+      const cols = ['2fr', ..._LB_COLS.map(() => '0.7fr'), '0.5fr'].join(' ');
+      const hdr = document.createElement('div');
+      hdr.className = 'grid text-xs font-semibold text-gray-500 uppercase tracking-wider bg-gray-50 border-b border-gray-100 px-4 py-2 select-none';
+      hdr.style.gridTemplateColumns = cols;
+      hdr.innerHTML = `<span>Model</span>`;
+      for (const c of _LB_COLS) {
+        const isSort = _leaderboardSortKey === c.key;
+        const arrow = isSort ? (_leaderboardSortDir === 'desc' ? ' ↓' : ' ↑') : '';
+        const span = document.createElement('span');
+        span.className = `text-right cursor-pointer hover:text-gray-800 transition ${isSort ? 'text-gray-800' : ''}`;
+        span.textContent = c.label + arrow;
+        span.onclick = () => _lbSort(c.key);
+        hdr.appendChild(span);
+      }
+      const parsedHdr = document.createElement('span');
+      parsedHdr.className = 'text-right';
+      parsedHdr.textContent = 'N';
+      hdr.appendChild(parsedHdr);
+      container.appendChild(hdr);
+
+      // ── Table rows ──
+      sorted.forEach((entry, ei) => {
+        const modelLabel = entry.split !== 'deleteme_for_pub' ? `${entry.model} (${entry.split})` : entry.model;
+        const o = entry.overall;
+        const color = _lbColor(entry.model);
+        const row = document.createElement('div');
+        row.className = `grid items-center px-4 py-2.5 text-sm ${ei % 2 === 1 ? 'bg-gray-50/60' : ''}`;
+        row.style.gridTemplateColumns = cols;
+
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'font-medium text-gray-700 truncate flex items-center gap-1.5';
+        nameSpan.title = modelLabel;
+        nameSpan.innerHTML = `<span class="inline-block w-2.5 h-2.5 rounded-sm shrink-0" style="background:${color}"></span>${modelLabel}`;
+        row.appendChild(nameSpan);
+
+        for (const c of _LB_COLS) {
+          const val = c.get(o);
+          const isSort = _leaderboardSortKey === c.key;
+          const span = document.createElement('span');
+          span.className = `text-right font-mono ${isSort ? 'font-semibold text-gray-900' : 'text-gray-600'}`;
+          span.textContent = c.fmt ? c.fmt(val) : _pct(val);
+          row.appendChild(span);
+        }
+        const isSkillRow = _leaderboardData[0]?.metric_type === 'skill';
+        const parsedSpan = document.createElement('span');
+        parsedSpan.className = 'text-right font-mono text-gray-400';
+        parsedSpan.textContent = isSkillRow ? '' : (o.successful_preds ?? '—');
+        row.appendChild(parsedSpan);
+        container.appendChild(row);
+      });
+
+    } else {
+      // ── Per-class view ──
+      for (const entry of sorted) {
+        const modelLabel = entry.split !== 'deleteme_for_pub' ? `${entry.model} (${entry.split})` : entry.model;
+        const o = entry.overall;
+        const color = _lbColor(entry.model);
+
+        const mhdr = document.createElement('div');
+        mhdr.className = 'px-4 py-2 border-b border-gray-100 font-semibold text-xs flex items-center gap-2';
+        const isSkillEntry = entry.metric_type === 'skill';
+        const summaryStr = isSkillEntry
+          ? `Acc ${(o.accuracy * 100).toFixed(1)}% · MAE ${o.mae?.toFixed(3) ?? '—'} · ρ ${o.spearman?.toFixed(3) ?? '—'}`
+          : `Acc ${_pct(o.accuracy)} · W-F1 ${_pct(o.weighted_f1)}`;
+        mhdr.innerHTML = `<span class="inline-block w-2.5 h-2.5 rounded-sm" style="background:${color}"></span>
+          <span style="color:${color}">${modelLabel}</span>
+          <span class="font-normal text-gray-500 ml-1">${summaryStr}</span>`;
+        container.appendChild(mhdr);
+
+        const chdr = document.createElement('div');
+        chdr.className = 'grid text-xs text-gray-400 bg-gray-50 border-b border-gray-100 px-4 py-1 select-none';
+        const isBbox = entry.metric_type === 'bbox';
+        if (isSkillEntry) {
+          chdr.style.gridTemplateColumns = '1.8fr 0.8fr 0.8fr 0.8fr';
+          chdr.innerHTML = `<span>Dimension</span><span class="text-right">Acc (EM)</span><span class="text-right">MAE ↓</span><span class="text-right">Spearman ρ</span>`;
+        } else if (isBbox) {
+          chdr.style.gridTemplateColumns = '1.6fr 0.8fr 0.8fr 0.7fr 0.7fr';
+          chdr.innerHTML = `<span>Class</span><span class="text-right">IoU@0.5</span><span class="text-right">F1@0.5</span><span class="text-right">Prec</span><span class="text-right">Rec</span>`;
+        } else {
+          chdr.style.gridTemplateColumns = '1.8fr 0.8fr 0.8fr 0.8fr';
+          chdr.innerHTML = `<span>Class</span><span class="text-right">F1</span><span class="text-right">Recall</span><span class="text-right">Prec</span>`;
+        }
+        container.appendChild(chdr);
+
+        entry.per_class.forEach((cls, ci) => {
+          const crow = document.createElement('div');
+          crow.className = `grid items-center px-4 py-1.5 text-sm ${ci % 2 === 1 ? 'bg-gray-50/60' : ''}`;
+          if (isSkillEntry) {
+            crow.style.gridTemplateColumns = '1.8fr 0.8fr 0.8fr 0.8fr';
+            const acc = cls.accuracy ?? 0;
+            crow.innerHTML = `
+              <span class="text-gray-600">${cls.class}</span>
+              <span class="text-right font-mono ${acc >= 0.5 ? 'text-green-600' : acc >= 0.2 ? 'text-amber-600' : 'text-red-400'}">${(acc * 100).toFixed(1)}%</span>
+              <span class="text-right font-mono text-gray-500">${cls.mae?.toFixed(3) ?? '—'}</span>
+              <span class="text-right font-mono text-gray-500">${cls.spearman?.toFixed(3) ?? '—'}</span>`;
+          } else if (isBbox) {
+            crow.style.gridTemplateColumns = '1.6fr 0.8fr 0.8fr 0.7fr 0.7fr';
+            const iou = cls.jaccard ?? 0;
+            crow.innerHTML = `
+              <span class="text-gray-600">${cls.class.replace(/_/g,' ')}</span>
+              <span class="text-right font-mono ${iou >= 0.5 ? 'text-green-600' : iou >= 0.25 ? 'text-amber-600' : 'text-red-400'}">${_pct(cls.jaccard)}</span>
+              <span class="text-right font-mono text-gray-500">${_pct(cls.f1)}</span>
+              <span class="text-right font-mono text-gray-500">${_pct(cls.precision)}</span>
+              <span class="text-right font-mono text-gray-500">${_pct(cls.recall)}</span>`;
+          } else {
+            crow.style.gridTemplateColumns = '1.8fr 0.8fr 0.8fr 0.8fr';
+            crow.innerHTML = `
+              <span class="text-gray-600">${cls.class}</span>
+              <span class="text-right font-mono ${(cls.f1 ?? 0) >= 0.5 ? 'text-green-600' : (cls.f1 ?? 0) >= 0.2 ? 'text-amber-600' : 'text-red-400'}">${_pct(cls.f1)}</span>
+              <span class="text-right font-mono text-gray-500">${_pct(cls.recall)}</span>
+              <span class="text-right font-mono text-gray-500">${_pct(cls.precision)}</span>`;
+          }
+          container.appendChild(crow);
+        });
+
+        const avgRow = document.createElement('div');
+        avgRow.className = 'grid items-center px-4 py-1.5 text-sm bg-gray-100 border-t border-b border-gray-200 font-semibold mb-2';
+        if (isSkillEntry) {
+          avgRow.style.gridTemplateColumns = '1.8fr 0.8fr 0.8fr 0.8fr';
+          avgRow.innerHTML = `
+            <span class="text-gray-700">Overall</span>
+            <span class="text-right font-mono text-gray-700">${(o.accuracy * 100).toFixed(1)}%</span>
+            <span class="text-right font-mono text-gray-700">${o.mae?.toFixed(3) ?? '—'}</span>
+            <span class="text-right font-mono text-gray-700">${o.spearman?.toFixed(3) ?? '—'}</span>`;
+        } else if (isBbox) {
+          avgRow.style.gridTemplateColumns = '1.6fr 0.8fr 0.8fr 0.7fr 0.7fr';
+          avgRow.innerHTML = `
+            <span class="text-gray-700">Average</span>
+            <span class="text-right font-mono text-gray-700">${_pct(o.accuracy)}</span>
+            <span class="text-right font-mono text-gray-700">${_pct(o.f1)}</span>
+            <span class="text-right font-mono text-gray-700">${_pct(o.precision)}</span>
+            <span class="text-right font-mono text-gray-700">${_pct(o.recall)}</span>`;
+        } else {
+          avgRow.style.gridTemplateColumns = '1.8fr 0.8fr 0.8fr 0.8fr';
+          avgRow.innerHTML = `
+            <span class="text-gray-700">Average</span>
+            <span class="text-right font-mono text-gray-700">${_pct(o.f1)}</span>
+            <span class="text-right font-mono text-gray-700">${_pct(o.recall)}</span>
+            <span class="text-right font-mono text-gray-700">${_pct(o.precision)}</span>`;
+        }
+        container.appendChild(avgRow);
+      }
+    }
+
+    // Phase_easy: also render subtask distribution chart
+    if (_leaderboardData[0]?.metric_type === 'phase_easy') _renderVtrbSubtaskDist();
+  }
+
+  // ── View selector (GT / model) ────────────────────────────────────────────
+  let _viewModelOptions = [];  // [{label, model, split}, ...]
+
+  async function loadModels(taskKey) {
+    const sec = document.getElementById('view-section');
+    _viewModelOptions = [];
+    const resp = await fetch(`/api/models?task=${taskKey}`);
+    const models = await resp.json();   // {modelName: [split, ...]}
+    const entries = Object.entries(models);
+    if (entries.length === 0) { sec.classList.add('hidden'); return; }
+
+    for (const [model, splits] of entries) {
+      for (const split of splits) {
+        const label = splits.length > 1 ? `${model} (${split})` : model;
+        _lbColor(model);  // ensure color is assigned via shared cache
+        _viewModelOptions.push({ label, model, split });
+      }
+    }
+    sec.classList.remove('hidden');
+    renderViewButtons();
+  }
+
+  function renderViewButtons() {
+    const tagsDiv = document.getElementById('view-tags');
+    tagsDiv.innerHTML = '';
+    for (const opt of _viewModelOptions) {
+      const active = selectedModels.find(m => m.model === opt.model && m.split === opt.split);
+      const btn = document.createElement('button');
+      btn.className = 'dataset-tag border rounded-full px-4 py-1 text-sm font-medium transition';
+      if (active) {
+        btn.style.background = active.color;
+        btn.style.color = 'white';
+        btn.style.borderColor = active.color;
+      } else {
+        btn.className += ' border-gray-300 text-gray-600 hover:border-violet-400 hover:text-violet-700';
+      }
+      btn.textContent = opt.label;
+      btn.addEventListener('click', () => selectView(opt.model, opt.split));
+      tagsDiv.appendChild(btn);
+    }
+  }
+
+  function selectView(model, split) {
+    const idx = selectedModels.findIndex(m => m.model === model && m.split === split);
+    if (idx >= 0) {
+      selectedModels.splice(idx, 1);
+    } else {
+      selectedModels.push({ model, split, color: _lbColor(model) });
+    }
+    renderViewButtons();
+    if (selectedTask && selectedDataset) {
+      const taskKey = `${selectedDataset}_${selectedTask}`;
+      const video = document.getElementById('video-select').value || null;
+      loadSamples(taskKey, video);
+    }
+  }
+
   // ── Dataset selection ────────────────────────────────────────────────────
   async function selectDataset(taskType, dataset, restoreVideo, restoreFilter) {
     selectedDataset = dataset;
+
+    // Reset VTRB-specific UI state so other datasets render correctly
+    document.getElementById('vtrb-phase-section').classList.add('hidden');
+    document.getElementById('vtrb-phase-dist').classList.add('hidden');
+    document.getElementById('vtrb-phase-model-legend').classList.add('hidden');
+    document.getElementById('frame-grid').classList.remove('hidden');
 
     document.querySelectorAll('.dataset-tag').forEach(b => {
       b.classList.toggle('active', b.dataset.dataset === dataset);
@@ -504,8 +1502,15 @@
     const videoSelect = document.getElementById('video-select');
     videoSelect.innerHTML = '';
 
-    if (videos.length > 0) {
+    if (taskType === 'phase_planning') {
+      videoSec.classList.add('hidden');
+      document.getElementById('samples-row').classList.remove('hidden');
+      _showPlanningMode();
+      loadLeaderboard(taskKey);
+      loadPlanningGT(taskKey, null);
+    } else if (videos.length > 0) {
       videoSec.classList.remove('hidden');
+      document.getElementById('samples-row').classList.remove('hidden');
       for (const v of videos) {
         const opt = document.createElement('option');
         opt.value = v;
@@ -514,19 +1519,39 @@
       }
       const targetVideo = restoreVideo && videos.includes(restoreVideo) ? restoreVideo : videos[0];
       if (restoreVideo && videos.includes(restoreVideo)) videoSelect.value = targetVideo;
-      loadExtras(taskKey, targetVideo);
-      loadSamples(taskKey, targetVideo, restoreFilter);
+      {
+        _hidePlanningMode();
+        loadModels(taskKey);
+        loadLeaderboard(taskKey);
+        loadExtras(taskKey, targetVideo);
+        loadSamples(taskKey, targetVideo, restoreFilter);
+      }
     } else if (knownTasks.includes(taskKey)) {
       const entry = dashboardData.find(e => e.task_key === taskKey);
       if (entry && entry.granularity === 'video') {
         videoSec.classList.add('hidden');
-        document.getElementById('n-input').closest('div').classList.add('hidden');
+        document.getElementById('samples-row').classList.add('hidden');
+        loadLeaderboard(taskKey);
         loadVideoSummary(taskType, dataset);
       } else {
         // Frame task, no per-video selector (e.g. endoscapes)
         videoSec.classList.add('hidden');
+        document.getElementById('samples-row').classList.remove('hidden');
+        loadModels(taskKey);
+        loadLeaderboard(taskKey);
         loadExtras(taskKey, null);
-        loadSamples(taskKey, null, restoreFilter);
+        if (taskKey === 'vtrb_suturing_phase_recognition') {
+          document.getElementById('frame-grid').classList.add('hidden');
+          document.getElementById('samples-row').classList.add('hidden');
+          document.getElementById('empty-state').classList.add('hidden');
+          document.getElementById('vtrb-fewshot-section').classList.add('hidden');
+          loadVtrbPhaseEasy(null).then(() => loadLeaderboard(taskKey));
+        } else {
+          document.getElementById('vtrb-phase-section').classList.add('hidden');
+          if (taskKey === 'vtrb_suturing_object_detection') loadVtrbFewShot();
+          else document.getElementById('vtrb-fewshot-section').classList.add('hidden');
+          loadSamples(taskKey, null, restoreFilter);
+        }
       }
     } else {
       videoSec.classList.add('hidden');
@@ -534,12 +1559,262 @@
     }
   }
 
+  // ── VTRB Few-shot panel ──────────────────────────────────────────────────
+  const VTRB_CLASS_COLORS = {"grippers":"#00ff88","target_tissue":"#ff6644","wound_gap":"#44aaff","bites":"#ff00ff","needle":"#dd88ff"};
+
+  async function loadVtrbFewShot() {
+    const sec = document.getElementById('vtrb-fewshot-section');
+    const iclGrid = document.getElementById('vtrb-fewshot-grid');
+    iclGrid.innerHTML = '';
+
+    const resp = await fetch('/api/vtrb_few_shot');
+    const data = await resp.json();
+
+    const makeCard = (imageUrl, boxes_pct, isPredPct) => {
+      const wrap = document.createElement('div');
+      wrap.className = 'relative flex-shrink-0 bg-gray-100 rounded-lg overflow-hidden cursor-zoom-in';
+      wrap.style.width = '220px';
+      wrap.style.aspectRatio = '4/3';
+
+      const img = document.createElement('img');
+      img.src = imageUrl;
+      img.className = 'w-full h-full object-cover block';
+      img.loading = 'lazy';
+      wrap.appendChild(img);
+
+      const overlay = document.createElement('div');
+      overlay.className = 'absolute inset-0 pointer-events-none';
+      wrap.appendChild(overlay);
+
+      const legendRow = document.createElement('div');
+      legendRow.className = 'flex flex-wrap gap-x-2 gap-y-0.5 pt-1 justify-center';
+
+      const drawBoxes = () => {
+        const seen = new Map();
+        boxes_pct.forEach(({ label: lbl, color, x0, y0, x1, y1 }) => {
+          const div = document.createElement('div');
+          div.style.cssText = `position:absolute;left:${x0}%;top:${y0}%;width:${x1-x0}%;height:${y1-y0}%;border:2px solid ${color};box-sizing:border-box;`;
+          overlay.appendChild(div);
+          if (!seen.has(lbl)) seen.set(lbl, color);
+        });
+        seen.forEach((color, lbl) => {
+          const item = document.createElement('span');
+          item.className = 'flex items-center gap-1 text-gray-600 text-xs';
+          item.innerHTML = `<span style="width:8px;height:8px;border-radius:2px;background:${color};display:inline-block;flex-shrink:0"></span>${lbl.replace(/_/g,' ')}`;
+          legendRow.appendChild(item);
+        });
+      };
+
+      img.onload = drawBoxes;
+      if (img.complete) drawBoxes();
+
+      const col = document.createElement('div');
+      col.className = 'flex flex-col items-center flex-shrink-0';
+      col.appendChild(wrap);
+      col.appendChild(legendRow);
+      return col;
+    };
+
+    // ICL examples (GT boxes use pct fields)
+    for (const ex of data.icl_examples) {
+      const boxes = ex.boxes.map(b => ({
+        label: b.label, color: b.color,
+        x0: b.x0_pct, y0: b.y0_pct, x1: b.x1_pct, y1: b.y1_pct,
+      }));
+      iclGrid.appendChild(makeCard(ex.image_url, boxes, false));
+    }
+
+    sec.classList.remove('hidden');
+  }
+
+  // ── VTRB Phase Easy ──────────────────────────────────────────────────────
+  let _vtrbPhaseData = null;
+  let _vtrbActiveSubtask = null;
+
+  async function loadVtrbPhaseEasy(subtask) {
+    _vtrbActiveSubtask = subtask;
+    const sec = document.getElementById('vtrb-phase-section');
+    const grid = document.getElementById('vtrb-phase-grid');
+    const subtaskBar = document.getElementById('vtrb-phase-subtasks');
+    grid.innerHTML = '<div class="col-span-full text-sm text-gray-400">Loading…</div>';
+    sec.classList.remove('hidden');
+
+    const url = '/api/vtrb_phase_easy' + (subtask ? `?subtask=${encodeURIComponent(subtask)}` : '');
+    const resp = await fetch(url);
+    const data = await resp.json();
+    _vtrbPhaseData = data;
+
+    // Subtask chips
+    const counts = data.subtask_counts || {};
+    const totalSamples = Object.values(counts).reduce((a, b) => a + b, 0);
+    subtaskBar.innerHTML = '';
+    const allBtn = document.createElement('button');
+    allBtn.className = `dataset-tag border rounded-full px-3 py-0.5 text-xs font-medium transition ${!subtask ? 'bg-gray-700 text-white border-gray-700' : 'border-gray-300 text-gray-600 hover:border-violet-400'}`;
+    allBtn.textContent = `All (${data.subtasks.length} subtasks · ${totalSamples})`;
+    allBtn.addEventListener('click', () => loadVtrbPhaseEasy(null).then(() => _renderLeaderboard()));
+    subtaskBar.appendChild(allBtn);
+
+    for (const st of data.subtasks) {
+      const btn = document.createElement('button');
+      const active = st === subtask;
+      const cnt = counts[st] ?? '';
+      btn.className = `dataset-tag border rounded-full px-3 py-0.5 text-xs font-medium transition ${active ? 'bg-violet-600 text-white border-violet-600' : 'border-gray-300 text-gray-600 hover:border-violet-400 hover:text-violet-700'}`;
+      btn.textContent = cnt ? `${st} (${cnt})` : st;
+      btn.title = st;
+      btn.addEventListener('click', () => loadVtrbPhaseEasy(st).then(() => _renderLeaderboard()));
+      subtaskBar.appendChild(btn);
+    }
+
+    // Cards
+    grid.innerHTML = '';
+    for (const [i, s] of data.samples.entries()) {
+      const card = document.createElement('div');
+      card.className = 'bg-white rounded-xl overflow-hidden shadow-sm border border-gray-100 cursor-pointer hover:shadow-md transition';
+
+      const imgWrap = document.createElement('div');
+      imgWrap.className = 'relative w-full bg-gray-100';
+      imgWrap.style.aspectRatio = '4/3';
+
+      const img = document.createElement('img');
+      img.src = s.image_url;
+      img.className = 'w-full h-full object-cover block';
+      img.loading = 'lazy';
+      imgWrap.appendChild(img);
+
+      // Correctness badge (if any predictions)
+      if (s.predictions.length > 0) {
+        const allCorrect = s.predictions.every(p => p.correct);
+        const anyCorrect = s.predictions.some(p => p.correct);
+        const badge = document.createElement('div');
+        badge.className = `absolute top-1.5 right-1.5 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white shadow ${allCorrect ? 'bg-green-500' : anyCorrect ? 'bg-yellow-500' : 'bg-red-500'}`;
+        badge.textContent = allCorrect ? '✓' : anyCorrect ? '~' : '✗';
+        imgWrap.appendChild(badge);
+      }
+
+      const info = document.createElement('div');
+      info.className = 'p-2';
+
+      const meta = document.createElement('p');
+      meta.className = 'text-xs text-gray-400 mb-1 truncate';
+      meta.textContent = s.id.replace('_phase_easy', '');
+      info.appendChild(meta);
+
+      const answerPill = document.createElement('span');
+      answerPill.className = 'inline-block text-xs bg-green-100 text-green-700 rounded-full px-2 py-0.5 font-medium truncate max-w-full';
+      answerPill.textContent = `${s.answer}: ${s.answer_text}`;
+      info.appendChild(answerPill);
+
+      // Model correctness rows
+      if (s.predictions.length > 0) {
+        const predList = document.createElement('div');
+        predList.className = 'mt-1.5 space-y-0.5';
+        for (const p of s.predictions) {
+          const color = _lbColor(p.model);
+          const row = document.createElement('div');
+          row.className = 'flex items-center gap-1.5 text-xs leading-tight';
+
+          const nameSpan = document.createElement('span');
+          nameSpan.className = 'font-medium truncate flex-1 min-w-0';
+          nameSpan.style.color = color;
+          nameSpan.title = p.model;
+          nameSpan.textContent = p.model.replace(/-\d+[Bb].*/, '');
+
+          const mark = document.createElement('span');
+          mark.className = 'font-bold flex-shrink-0';
+          mark.style.color = p.correct ? '#16a34a' : '#dc2626';
+          mark.textContent = p.correct ? '○' : '✕';
+
+          row.appendChild(nameSpan);
+          row.appendChild(mark);
+          predList.appendChild(row);
+        }
+        info.appendChild(predList);
+      }
+
+      card.appendChild(imgWrap);
+      card.appendChild(info);
+      card.addEventListener('click', () => openVtrbPhaseModal(s));
+      grid.appendChild(card);
+    }
+  }
+
+  function openVtrbPhaseModal(s) {
+    const lb = document.getElementById('lightbox');
+    const inner = document.getElementById('lightbox-inner');
+    const legendDiv = document.getElementById('lightbox-legend');
+    inner.innerHTML = '';
+    legendDiv.innerHTML = '';
+    legendDiv.classList.add('hidden');
+    document.getElementById('lightbox-caption').textContent = s.id.replace('_phase_easy', '');
+    lb.classList.remove('hidden');
+    lb.classList.add('flex');
+    lightboxIndex = -1;
+
+    inner.className = 'flex flex-col items-center gap-4 max-w-2xl w-full';
+
+    // Image
+    const img = document.createElement('img');
+    img.src = s.image_url;
+    img.className = 'max-h-[55vh] w-auto rounded-lg shadow-lg block';
+    inner.appendChild(img);
+
+    // Question + choices
+    const qbox = document.createElement('div');
+    qbox.className = 'w-full bg-gray-900 rounded-xl p-4 text-sm';
+
+    const qtext = document.createElement('p');
+    qtext.className = 'text-gray-200 font-medium mb-3';
+    qtext.textContent = s.question;
+    qbox.appendChild(qtext);
+
+    for (const [letter, text] of Object.entries(s.choices)) {
+      const isGT = letter === s.answer;
+      const modelPreds = s.predictions.filter(p => p.answer_letter === letter);
+
+      const row = document.createElement('div');
+      row.className = `flex items-start gap-2 py-1.5 px-2 rounded-lg mb-1 ${isGT ? 'bg-green-900/40' : ''}`;
+
+      const letterBadge = document.createElement('span');
+      letterBadge.className = `text-xs font-bold w-5 h-5 flex items-center justify-center rounded flex-shrink-0 mt-0.5 ${isGT ? 'bg-green-500 text-white' : 'bg-gray-700 text-gray-300'}`;
+      letterBadge.textContent = letter;
+      row.appendChild(letterBadge);
+
+      const textEl = document.createElement('span');
+      textEl.className = `flex-1 text-sm ${isGT ? 'text-green-300 font-medium' : 'text-gray-300'}`;
+      textEl.textContent = text;
+      row.appendChild(textEl);
+
+      // Model indicator dots
+      if (modelPreds.length > 0) {
+        const dots = document.createElement('div');
+        dots.className = 'flex gap-1 flex-shrink-0 mt-0.5';
+        for (const p of modelPreds) {
+          const modelState = selectedModels.find(m => m.model === p.model && m.split === p.split);
+          const color = modelState?.color || _lbColor(p.model);
+          const dot = document.createElement('span');
+          dot.className = 'text-xs font-semibold px-1.5 py-0.5 rounded';
+          dot.style.background = color + '33';
+          dot.style.color = color;
+          dot.style.border = `1px solid ${color}`;
+          dot.title = p.model;
+          dot.textContent = p.model.split('-')[0];
+          dots.appendChild(dot);
+        }
+        row.appendChild(dots);
+      }
+
+      qbox.appendChild(row);
+    }
+    inner.appendChild(qbox);
+  }
+
   // ── Load extras (video / timeline / histogram) — independent of samples ──
   function loadExtras(taskKey, video) {
     document.getElementById('timeline-section').classList.add('hidden');
     document.getElementById('video-player-section').classList.add('hidden');
     document.getElementById('action-histogram-section').classList.add('hidden');
-    if (taskKey.includes('phase_recognition')) {
+    document.getElementById('triplet-dist-section').classList.add('hidden');
+    if (video && taskKey.includes('phase_recognition')) {
       loadVideoPlayer(video);
       loadTimeline(video);
     }
@@ -560,19 +1835,33 @@
 
     try {
       const videoParam = video ? `&video=${video}` : '';
-      const resp = await fetch(`/api/samples?task=${taskKey}${videoParam}&n=${n}`);
+      const modelParam = selectedModels.map(m =>
+        `&model=${encodeURIComponent(m.model)}&split=${encodeURIComponent(m.split)}`
+      ).join('');
+      const resp = await fetch(`/api/samples?task=${taskKey}${videoParam}&n=${n}${modelParam}`);
       if (!resp.ok) {
-        const err = await resp.json();
-        showError(err.detail || 'Failed to load samples');
+        const text = await resp.text();
+        let detail = text;
+        try { detail = JSON.parse(text).detail || text; } catch {}
+        spinner.classList.remove('show');
+        showError(detail || 'Failed to load samples');
         return;
       }
       const samples = await resp.json();
       allSamples = samples;
       activeFilter = null;
       spinner.classList.remove('show');
+      if (samples.length === 0) {
+        const p = empty.querySelector('p');
+        if (p) p.textContent = selectedModels.length > 0
+          ? 'No predictions for this video. Try switching to another video.'
+          : 'No frames found.';
+        empty.classList.remove('hidden');
+        return;
+      }
       renderFilterBar(samples, restoreFilter);
       if (restoreFilter) {
-        const filtered = restoreFilter === null ? samples : samples.filter(s => getSampleLabels(s).includes(restoreFilter));
+        const filtered = restoreFilter === null ? samples : samples.filter(s => sampleMatchesTripletFilter(s, restoreFilter));
         renderFrameGrid(filtered);
       } else {
         renderFrameGrid(samples);
@@ -584,10 +1873,55 @@
     }
   }
 
+  // ── Phase planning colors (index matches phase_id 0-6) ──────────────────
+  const PHASE_COLORS_PLANNING = [
+    "#c0392b",  // 0 Preparation
+    "#27ae60",  // 1 Calot Triangle Dissection
+    "#5dade2",  // 2 Clipping & Cutting
+    "#d4ac0d",  // 3 Gallbladder Dissection
+    "#e67e22",  // 4 Gallbladder Packaging
+    "#8e44ad",  // 5 Cleaning & Coagulation
+    "#b39ddb",  // 6 Gallbladder Retraction
+  ];
+  const PHASE_NAMES_PLANNING = [
+    "Preparation", "Calot Triangle Dissection", "Clipping & Cutting",
+    "Gallbladder Dissection", "Gallbladder Packaging",
+    "Cleaning & Coagulation", "Gallbladder Retraction",
+  ];
+  function phaseColor(name) {
+    const idx = PHASE_NAMES_PLANNING.indexOf(name);
+    return idx >= 0 ? PHASE_COLORS_PLANNING[idx] : '#6b7280';
+  }
+
   // ── Action colors (shared between histogram bars and label pills) ─────────
   // Order matches HEICHOLE_LABELS action names: Grasp, Hold, Cut, Clip
   const ACTION_COLORS = ['#3b82f6', '#f59e0b', '#10b981', '#ef4444'];
   const ACTION_COLOR_MAP = { 'Grasp': '#3b82f6', 'Hold': '#f59e0b', 'Cut': '#10b981', 'Clip': '#ef4444' };
+  // Triplet component colors: instrument=blue, verb=emerald, target=amber
+  const TRIPLET_COLORS = { inst: '#3b82f6', verb: '#059669', tgt: '#d97706' };
+
+  function isTripletLabel(str) { return str.includes(' → '); }
+
+  // Parse "inst:grasper" style filter values
+  function parseTripletFilter(fv) {
+    if (!fv) return null;
+    const m = fv.match(/^(inst|verb|tgt):(.+)$/);
+    return m ? { section: m[1], value: m[2] } : null;
+  }
+
+  function sampleMatchesTripletFilter(s, fv) {
+    const tf = parseTripletFilter(fv);
+    if (!tf) return getSampleLabels(s).includes(fv);
+    const labels = getSampleLabels(s);
+    return labels.some(l => {
+      if (!isTripletLabel(l)) return false;
+      const [inst, verb, tgt] = l.split(' → ');
+      if (tf.section === 'inst') return inst === tf.value;
+      if (tf.section === 'verb') return verb === tf.value;
+      if (tf.section === 'tgt')  return tgt  === tf.value;
+      return false;
+    });
+  }
 
   // ── Action histogram ──────────────────────────────────────────────────────
 
@@ -637,8 +1971,13 @@
 
   // ── Video player ─────────────────────────────────────────────────────────
   function loadVideoPlayer(video) {
-    // video name is e.g. "Hei-Chole1", file is "Hei-Chole1.mp4" in Videos/Full/
-    const src = `/video/HeiChole/Videos/Full/${video}.mp4`;
+    const ds = selectedDataset || 'heichole';
+    let src;
+    if (ds === 'cholec80') {
+      src = `/video/Cholec80/videos/${video}.mp4`;
+    } else {
+      src = `/video/HeiChole/Videos/Full/${video}.mp4`;
+    }
     const source = document.getElementById('video-source');
     const player = document.getElementById('video-player');
     const sec = document.getElementById('video-player-section');
@@ -649,7 +1988,8 @@
 
   // ── Phase timeline ────────────────────────────────────────────────────────
   async function loadTimeline(video) {
-    const resp = await fetch(`/api/phase_timeline?video=${video}`);
+    const ds = selectedDataset || 'heichole';
+    const resp = await fetch(`/api/phase_timeline?video=${video}&dataset=${ds}`);
     if (!resp.ok) return;
     const segments = await resp.json();
     renderTimeline(segments);
@@ -701,13 +2041,129 @@
     return ['Unknown'];
   }
 
+  function renderTripletDist({ instCount, verbCount, tgtCount, total }) {
+    const sec = document.getElementById('triplet-dist-section');
+    const container = document.getElementById('triplet-dist');
+    container.innerHTML = '';
+
+    const sections = [
+      { label: 'Instrument', counts: instCount, color: TRIPLET_COLORS.inst },
+      { label: 'Verb',       counts: verbCount, color: TRIPLET_COLORS.verb },
+      { label: 'Target',     counts: tgtCount,  color: TRIPLET_COLORS.tgt  },
+    ];
+
+    sections.forEach(({ label, counts, color }) => {
+      const col = document.createElement('div');
+
+      const title = document.createElement('p');
+      title.className = 'text-xs font-bold uppercase tracking-wide mb-2';
+      title.style.color = color;
+      title.textContent = label;
+      col.appendChild(title);
+
+      const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+      const maxCount = entries[0]?.[1] || 1;
+
+      entries.forEach(([val, cnt]) => {
+        const row = document.createElement('div');
+        row.className = 'flex items-center gap-2 mb-1';
+
+        const name = document.createElement('span');
+        name.className = 'text-xs text-gray-600 shrink-0';
+        name.style.width = '110px';
+        name.textContent = val;
+
+        const barWrap = document.createElement('div');
+        barWrap.className = 'flex-1 bg-gray-100 rounded-full h-3 overflow-hidden';
+
+        const bar = document.createElement('div');
+        bar.className = 'h-full rounded-full';
+        bar.style.width = (cnt / maxCount * 100) + '%';
+        bar.style.background = color;
+        barWrap.appendChild(bar);
+
+        const countEl = document.createElement('span');
+        countEl.className = 'text-xs text-gray-400 shrink-0 w-8 text-right';
+        countEl.textContent = cnt;
+
+        row.appendChild(name);
+        row.appendChild(barWrap);
+        row.appendChild(countEl);
+        col.appendChild(row);
+      });
+
+      container.appendChild(col);
+    });
+
+    sec.classList.remove('hidden');
+  }
+
   function renderFilterBar(samples, restoreFilter) {
     const sec = document.getElementById('filter-section');
     const btnsDiv = document.getElementById('filter-btns');
 
-    // Collect all unique labels present in loaded samples
-    const labelSet = new Set();
-    samples.forEach(s => getSampleLabels(s).forEach(l => labelSet.add(l)));
+    // Check if this is a triplet task (labels contain ' → ')
+    const allLabels = [];
+    samples.forEach(s => getSampleLabels(s).forEach(l => allLabels.push(l)));
+    const isTriplet = allLabels.some(isTripletLabel);
+
+    if (isTriplet) {
+      // Build per-component counts
+      const instCount = {}, verbCount = {}, tgtCount = {};
+      allLabels.forEach(l => {
+        if (!isTripletLabel(l)) return;
+        const [inst, verb, tgt] = l.split(' → ');
+        instCount[inst] = (instCount[inst] || 0) + 1;
+        verbCount[verb] = (verbCount[verb] || 0) + 1;
+        tgtCount[tgt]   = (tgtCount[tgt]   || 0) + 1;
+      });
+
+      const totalTriplets = allLabels.filter(isTripletLabel).length;
+      if (Object.keys(instCount).length === 0) {
+        sec.classList.add('hidden');
+        document.getElementById('triplet-dist-section').classList.add('hidden');
+        return;
+      }
+
+      // Render distribution bar charts
+      renderTripletDist({ instCount, verbCount, tgtCount, total: totalTriplets });
+
+      // Render filter buttons with line-break per section
+      btnsDiv.innerHTML = '';
+      sec.classList.remove('hidden');
+
+      btnsDiv.appendChild(makeTripletFilterBtn('All', null, restoreFilter == null, '#6b7280'));
+
+      const sections = [
+        { key: 'inst', label: 'Instrument', counts: instCount, color: TRIPLET_COLORS.inst },
+        { key: 'verb', label: 'Verb',       counts: verbCount, color: TRIPLET_COLORS.verb },
+        { key: 'tgt',  label: 'Target',     counts: tgtCount,  color: TRIPLET_COLORS.tgt  },
+      ];
+
+      sections.forEach(({ key, label, counts, color }) => {
+        // Line break before each section
+        const br = document.createElement('div');
+        br.className = 'w-full h-0';
+        btnsDiv.appendChild(br);
+
+        const header = document.createElement('span');
+        header.className = 'text-xs font-bold uppercase tracking-wide';
+        header.style.color = color;
+        header.textContent = label + ':';
+        btnsDiv.appendChild(header);
+
+        Object.entries(counts).sort((a, b) => b[1] - a[1]).forEach(([val, cnt]) => {
+          const fv = `${key}:${val}`;
+          btnsDiv.appendChild(makeTripletFilterBtn(`${val} (${cnt})`, fv, fv === restoreFilter, color));
+        });
+      });
+
+      if (restoreFilter) activeFilter = restoreFilter;
+      return;
+    }
+
+    // Default flat filter bar for non-triplet tasks
+    const labelSet = new Set(allLabels);
     const labels = [...labelSet].sort((a, b) => a === 'Unknown' ? 1 : b === 'Unknown' ? -1 : a.localeCompare(b));
 
     if (labels.length <= 1 && !labelSet.has('Unknown')) {
@@ -717,16 +2173,42 @@
 
     btnsDiv.innerHTML = '';
     sec.classList.remove('hidden');
-
-    // "All" button
     btnsDiv.appendChild(makeFilterBtn('All', null, restoreFilter == null));
-
     labels.forEach(label => {
       const count = samples.filter(s => getSampleLabels(s).includes(label)).length;
       btnsDiv.appendChild(makeFilterBtn(`${label} (${count})`, label, label === restoreFilter));
     });
 
     if (restoreFilter) activeFilter = restoreFilter;
+  }
+
+  function makeTripletFilterBtn(text, filterValue, isActive, color) {
+    const btn = document.createElement('button');
+    btn.textContent = text;
+    btn.dataset.filter = filterValue ?? '__all__';
+    const baseClass = 'px-3 py-1 rounded-full text-xs font-medium border transition';
+    btn.style.cssText = isActive
+      ? `background:${color};color:white;border-color:${color}`
+      : `background:white;color:${color};border-color:${color}44`;
+    btn.className = baseClass;
+    btn.addEventListener('click', () => {
+      activeFilter = filterValue;
+      document.querySelectorAll('#filter-btns button').forEach(b => {
+        const fv = b.dataset.filter === '__all__' ? null : b.dataset.filter;
+        const active = fv === activeFilter;
+        const tf = parseTripletFilter(fv);
+        const c = tf ? TRIPLET_COLORS[tf.section] : (fv == null ? '#6b7280' : '#6b7280');
+        b.style.cssText = active
+          ? `background:${c};color:white;border-color:${c}`
+          : `background:white;color:${c};border-color:${c}44`;
+      });
+      const filtered = activeFilter === null
+        ? allSamples
+        : allSamples.filter(s => sampleMatchesTripletFilter(s, activeFilter));
+      renderFrameGrid(filtered);
+      pushState();
+    });
+    return btn;
   }
 
   function makeFilterBtn(text, filterValue, isActive) {
@@ -754,7 +2236,7 @@
       });
       const filtered = activeFilter === null
         ? allSamples
-        : allSamples.filter(s => getSampleLabels(s).includes(activeFilter));
+        : allSamples.filter(s => sampleMatchesTripletFilter(s, activeFilter));
       renderFrameGrid(filtered);
       pushState();
     });
@@ -783,18 +2265,40 @@
       img.addEventListener('click', () => openLightbox(s.image_url, `${s.video}  ·  frame ${s.frame_idx}`, s.label, idx));
       imgWrap.appendChild(img);
 
-      // Bbox overlays
+      // Correctness corner badge: ✓ if all predictions correct
+      if (s.predictions?.length > 0 && s.predictions.every(p => p.correct === true)) {
+        const corner = document.createElement('div');
+        corner.className = 'absolute top-1.5 right-1.5 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white shadow bg-green-500';
+        corner.textContent = '✓';
+        imgWrap.appendChild(corner);
+      }
+
+      // Bbox overlays — GT boxes
       if (s.label && s.label.type === 'bbox') {
         s.label.boxes.forEach(box => {
           const div = document.createElement('div');
           div.className = 'absolute pointer-events-none';
-          div.style.cssText = `
-            left:${box.x0_pct}%; top:${box.y0_pct}%;
-            width:${box.x1_pct - box.x0_pct}%; height:${box.y1_pct - box.y0_pct}%;
-            border: 2px solid ${box.color};
-          `;
+          div.style.cssText = `left:${box.x0_pct}%;top:${box.y0_pct}%;width:${box.x1_pct - box.x0_pct}%;height:${box.y1_pct - box.y0_pct}%;border:2px solid ${box.color};`;
           imgWrap.appendChild(div);
         });
+
+        // Prediction bbox overlays (pct-based, e.g. VTRB — no GT, show first pred model's boxes)
+        const VTRB_COLORS = {"grippers":"#00ff88","target_tissue":"#ff6644","wound_gap":"#44aaff","bites":"#ff00ff","needle":"#dd88ff"};
+        const firstPredWithPct = (s.predictions || []).find(p => p.data?.parsed_bboxes_pct);
+        if (firstPredWithPct) {
+          Object.entries(firstPredWithPct.data.parsed_bboxes_pct).forEach(([lbl, boxes]) => {
+            if (!Array.isArray(boxes)) return;
+            const color = VTRB_COLORS[lbl] || '#aaa';
+            boxes.forEach(b => {
+              if (!Array.isArray(b) || b.length !== 4) return;
+              const [x0, y0, x1, y1] = b;
+              const div = document.createElement('div');
+              div.className = 'absolute pointer-events-none';
+              div.style.cssText = `left:${x0}%;top:${y0}%;width:${x1-x0}%;height:${y1-y0}%;border:2px solid ${color};`;
+              imgWrap.appendChild(div);
+            });
+          });
+        }
       }
 
       const info = document.createElement('div');
@@ -808,10 +2312,416 @@
       const labelDiv = renderLabel(s.label);
       info.appendChild(labelDiv);
 
+      // Prediction rows (one per selected model)
+      for (const pred of (s.predictions || [])) {
+        const modelState = selectedModels.find(m => m.model === pred.model && m.split === pred.split);
+        const color = modelState?.color || '#7c3aed';
+
+        const predRow = document.createElement('div');
+        predRow.className = 'flex items-center gap-1.5 mt-1 flex-wrap';
+
+        const prefix = document.createElement('span');
+        prefix.className = 'text-xs font-semibold shrink-0';
+        prefix.style.color = color;
+        // Abbreviate model name: first two dash-segments
+        prefix.textContent = pred.model.split('-').slice(0, 2).join('-') + ':';
+        predRow.appendChild(prefix);
+
+        const predPills = renderLabel(pred);
+        predPills.querySelectorAll('.label-pill').forEach(p => {
+          p.style.background = color; p.style.color = 'white';
+        });
+        predRow.appendChild(predPills);
+
+        if (pred.correct !== null) {
+          const badge = document.createElement('span');
+          badge.className = 'text-xs font-bold ' + (pred.correct ? 'text-green-500' : 'text-red-500');
+          badge.textContent = pred.correct ? '✓' : '✗';
+          predRow.appendChild(badge);
+        }
+        info.appendChild(predRow);
+      }
+
       card.appendChild(imgWrap);
       card.appendChild(info);
       grid.appendChild(card);
     }
+  }
+
+  // ── Phase planning mode helpers ───────────────────────────────────────────
+  function _showPlanningMode() {
+    document.getElementById('frame-grid').classList.add('hidden');
+    document.getElementById('planning-section').classList.remove('hidden');
+    document.getElementById('view-section').classList.add('hidden');
+    document.getElementById('filter-section').classList.add('hidden');
+  }
+  function _hidePlanningMode() {
+    document.getElementById('frame-grid').classList.remove('hidden');
+    document.getElementById('planning-section').classList.add('hidden');
+    document.getElementById('planning-model-chips').innerHTML = '';
+    _planningSelectedModels = new Set();
+  }
+
+  // ── Phase planning GT ─────────────────────────────────────────────────────
+  let _planningData = [];
+  let _planningPreds = {};  // {sample_id: {model: {current_phase, next_phase}}}
+  let _planningSelectedModels = new Set();  // selected model names for filtering
+
+  function _renderPlanningModelChips() {
+    const bar = document.getElementById('planning-model-chips');
+    if (!bar) return;
+    bar.innerHTML = '';
+    // Collect all models that have any predictions
+    const allModels = [...new Set(Object.values(_planningPreds).flatMap(mp => Object.keys(mp)))].sort();
+    if (allModels.length === 0) return;
+
+    allModels.forEach(m => {
+      const color = _lbColor(m);
+      const active = _planningSelectedModels.has(m);
+      const btn = document.createElement('button');
+      btn.className = 'px-3 py-0.5 rounded-full text-xs font-semibold border transition';
+      btn.style.borderColor = color;
+      if (active) {
+        btn.style.background = color;
+        btn.style.color = '#fff';
+      } else {
+        btn.style.background = 'transparent';
+        btn.style.color = color;
+      }
+      btn.textContent = m;
+      btn.addEventListener('click', () => {
+        if (_planningSelectedModels.has(m)) _planningSelectedModels.delete(m);
+        else _planningSelectedModels.add(m);
+        _renderPlanningModelChips();
+        renderPlanningGrid(_planningData);
+      });
+      bar.appendChild(btn);
+    });
+  }
+
+  async function loadPlanningGT(taskKey, video) {
+    const grid = document.getElementById('planning-grid');
+    const legend = document.getElementById('planning-legend');
+    const section = document.getElementById('planning-section');
+    const spinner = document.getElementById('loading-spinner');
+    const empty = document.getElementById('empty-state');
+
+    grid.innerHTML = '';
+    legend.innerHTML = '';
+    section.classList.add('hidden');
+    empty.classList.add('hidden');
+    spinner.classList.add('show');
+
+    const n = parseInt(document.getElementById('n-input').value) || 0;
+    const videoParam = video ? `&video=${encodeURIComponent(video)}` : '';
+    const [resp, predsResp] = await Promise.all([
+      fetch(`/api/phase_planning_samples?task=${taskKey}${videoParam}&n=${n}`),
+      fetch(`/api/phase_planning_predictions`),
+    ]);
+    spinner.classList.remove('show');
+    if (!resp.ok) { showError('Failed to load planning samples'); return; }
+    _planningData = await resp.json();
+    _planningPreds = predsResp.ok ? await predsResp.json() : {};
+    _planningSelectedModels = new Set();
+    if (_planningData.length === 0) {
+      empty.classList.remove('hidden');
+      return;
+    }
+
+    // Build phase legend from unique phases in this video
+    const seenPhases = new Set(_planningData.flatMap(s => [s.phase, s.next_phase]));
+    PHASE_NAMES_PLANNING.forEach((name, i) => {
+      if (!seenPhases.has(name)) return;
+      const chip = document.createElement('span');
+      chip.className = 'px-2 py-0.5 rounded-full text-xs font-medium text-white';
+      chip.style.background = PHASE_COLORS_PLANNING[i];
+      chip.textContent = name;
+      legend.appendChild(chip);
+    });
+
+    _renderPlanningModelChips();
+    renderPlanningGrid(_planningData);
+    section.classList.remove('hidden');
+    pushState();
+  }
+
+  function renderPlanningGrid(samples) {
+    const grid = document.getElementById('planning-grid');
+    grid.innerHTML = '';
+    // Filter: if any models selected, only show cards that have a prediction from at least one
+    const filtered = _planningSelectedModels.size === 0
+      ? samples
+      : samples.filter(s => {
+          const preds = _planningPreds[s.id] || {};
+          return [..._planningSelectedModels].some(m => m in preds);
+        });
+    filtered.forEach(s => {
+      const preds = _planningPreds[s.id] || {};
+      const modelNames = Object.keys(preds);
+
+      const card = document.createElement('div');
+      card.className = 'bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm cursor-pointer hover:shadow-md transition';
+      card.onclick = () => openPlanningModal(s);
+
+      const imgWrap = document.createElement('div');
+      imgWrap.className = 'relative bg-gray-100';
+      imgWrap.style.aspectRatio = '16/9';
+      const img = document.createElement('img');
+      img.src = s.image_url;
+      img.className = 'w-full h-full object-cover';
+      img.loading = 'lazy';
+      imgWrap.appendChild(img);
+
+      // Transition badge (same→same vs phase change)
+      const samePhase = s.phase === s.next_phase;
+      const badge = document.createElement('span');
+      badge.className = 'absolute top-2 right-2 px-1.5 py-0.5 rounded text-xs font-bold text-white';
+      badge.style.background = samePhase ? '#6b7280' : '#dc2626';
+      badge.textContent = samePhase ? 'mid' : 'end';
+      imgWrap.appendChild(badge);
+
+      const info = document.createElement('div');
+      info.className = 'p-3';
+
+      // Phase arrow row (GT)
+      const arrow = document.createElement('div');
+      arrow.className = 'flex items-center gap-1.5 flex-wrap';
+      const curPill = document.createElement('span');
+      curPill.className = 'px-2 py-0.5 rounded-full text-xs font-medium text-white truncate max-w-[120px]';
+      curPill.style.background = phaseColor(s.phase);
+      curPill.title = s.phase;
+      curPill.textContent = s.phase;
+      const arrowSvg = document.createElement('span');
+      arrowSvg.className = 'text-gray-400 text-xs font-bold flex-shrink-0';
+      arrowSvg.textContent = '→';
+      const nxtPill = document.createElement('span');
+      nxtPill.className = 'px-2 py-0.5 rounded-full text-xs font-medium text-white truncate max-w-[120px]';
+      nxtPill.style.background = phaseColor(s.next_phase);
+      nxtPill.title = s.next_phase;
+      nxtPill.textContent = s.next_phase;
+      arrow.appendChild(curPill);
+      arrow.appendChild(arrowSvg);
+      arrow.appendChild(nxtPill);
+
+      const idLabel = document.createElement('p');
+      idLabel.className = 'text-xs text-gray-400 mt-1.5 truncate';
+      idLabel.textContent = `${s.video_id} · frame ${s.anchor_frame}`;
+
+      info.appendChild(arrow);
+      info.appendChild(idLabel);
+
+      // Per-model prediction rows
+      if (modelNames.length > 0) {
+        const predSection = document.createElement('div');
+        predSection.className = 'mt-2 border-t border-gray-100 pt-2 space-y-1';
+        modelNames.forEach(m => {
+          const mp = preds[m];
+          const currOk = mp.current_phase === s.phase;
+          const nextOk = mp.next_phase === s.next_phase;
+          const row = document.createElement('div');
+          row.className = 'flex items-center gap-1.5 flex-wrap';
+
+          const mLabel = document.createElement('span');
+          mLabel.className = 'text-xs font-medium flex-shrink-0';
+          mLabel.style.color = _lbColor(m);
+          mLabel.textContent = m.replace(/-\d+[Bb].*/, '');
+          mLabel.style.maxWidth = '80px';
+          mLabel.style.overflow = 'hidden';
+          mLabel.style.textOverflow = 'ellipsis';
+          mLabel.style.whiteSpace = 'nowrap';
+
+          const sep = document.createElement('span');
+          sep.className = 'text-gray-300 text-xs';
+          sep.textContent = ':';
+
+          const cBadge = document.createElement('span');
+          cBadge.className = 'text-xs px-1 rounded font-medium';
+          cBadge.style.background = currOk ? '#d1fae5' : '#fee2e2';
+          cBadge.style.color = currOk ? '#065f46' : '#991b1b';
+          cBadge.title = `curr: ${mp.current_phase}`;
+          cBadge.textContent = currOk ? '✓' : '✗';
+
+          const nBadge = document.createElement('span');
+          nBadge.className = 'text-xs px-1 rounded font-medium';
+          nBadge.style.background = nextOk ? '#d1fae5' : '#fee2e2';
+          nBadge.style.color = nextOk ? '#065f46' : '#991b1b';
+          nBadge.title = `next: ${mp.next_phase}`;
+          nBadge.textContent = nextOk ? '✓' : '✗';
+
+          row.appendChild(mLabel);
+          row.appendChild(sep);
+          row.appendChild(cBadge);
+          row.appendChild(nBadge);
+          predSection.appendChild(row);
+        });
+        info.appendChild(predSection);
+      }
+
+      card.appendChild(imgWrap);
+      card.appendChild(info);
+      grid.appendChild(card);
+    });
+  }
+
+  // ── Phase planning modal ──────────────────────────────────────────────────
+  async function openPlanningModal(s) {
+    const preds = _planningPreds[s.id] || {};
+
+    // Open the shared filmstrip modal first (handles frame context)
+    await openFilmstrip(s);
+
+    // Append per-model predictions to the legend area
+    if (Object.keys(preds).length > 0) {
+      const legendEl = document.getElementById('filmstrip-legend');
+      const sep = document.createElement('span');
+      sep.className = 'text-gray-500 text-xs ml-2 mr-1';
+      sep.textContent = '|';
+      legendEl.appendChild(sep);
+
+      Object.entries(preds).forEach(([m, mp]) => {
+        const currOk = mp.current_phase === s.phase;
+        const nextOk = mp.next_phase === s.next_phase;
+        const badge = document.createElement('span');
+        badge.className = 'flex items-center gap-1 text-xs';
+
+        const mSpan = document.createElement('span');
+        mSpan.className = 'font-semibold';
+        mSpan.style.color = _lbColor(m);
+        mSpan.textContent = m.replace(/-\d+[Bb].*/, '');
+
+        const cMark = document.createElement('span');
+        cMark.className = 'px-1 rounded font-bold';
+        cMark.style.background = currOk ? '#065f46' : '#7f1d1d';
+        cMark.style.color = currOk ? '#d1fae5' : '#fecaca';
+        cMark.title = `curr: ${mp.current_phase}`;
+        cMark.textContent = currOk ? '✓' : '✗';
+
+        const nMark = document.createElement('span');
+        nMark.className = 'px-1 rounded font-bold';
+        nMark.style.background = nextOk ? '#065f46' : '#7f1d1d';
+        nMark.style.color = nextOk ? '#d1fae5' : '#fecaca';
+        nMark.title = `next: ${mp.next_phase}`;
+        nMark.textContent = nextOk ? '✓' : '✗';
+
+        badge.appendChild(mSpan);
+        badge.appendChild(cMark);
+        badge.appendChild(nMark);
+        legendEl.appendChild(badge);
+      });
+    }
+  }
+
+  function _makeFrameThumb(f, anchorFrame, isAnchor) {
+    const wrap = document.createElement('div');
+    wrap.className = 'relative';
+
+    const img = document.createElement('img');
+    img.src = f.image_url;
+    img.className = 'w-full rounded-lg object-cover';
+    img.style.height = '90px';
+
+    if (isAnchor) {
+      wrap.classList.add('ring-2', 'ring-white', 'rounded-lg');
+    }
+
+    const diff = f.frame_idx - anchorFrame;
+    const label = document.createElement('p');
+    label.className = 'text-center text-xs mt-1 ' + (isAnchor ? 'text-white font-bold' : 'text-gray-400');
+    label.textContent = diff === 0 ? 't=0' : diff < 0 ? `t${diff}` : `t+${diff}`;
+
+    wrap.appendChild(img);
+    wrap.appendChild(label);
+    return wrap;
+  }
+
+  async function openFilmstrip(sample) {
+    const modal = document.getElementById('filmstrip-modal');
+    const row1 = document.getElementById('filmstrip-row1');
+    const row2 = document.getElementById('filmstrip-row2');
+    const row3 = document.getElementById('filmstrip-row3');
+    const legendEl = document.getElementById('filmstrip-legend');
+    const videoLabel = document.getElementById('filmstrip-video-label');
+
+    row1.innerHTML = row2.innerHTML = row3.innerHTML = '';
+    legendEl.innerHTML = '';
+    videoLabel.textContent = `${sample.video_id}  ·  frame ${sample.anchor_frame}`;
+
+    // Phase arrow legend
+    const curPill = document.createElement('span');
+    curPill.className = 'px-2 py-1 rounded-full text-sm font-semibold text-white';
+    curPill.style.background = phaseColor(sample.phase);
+    curPill.textContent = sample.phase;
+    const arrowSpan = document.createElement('span');
+    arrowSpan.className = 'text-white text-lg font-bold';
+    arrowSpan.textContent = ' → ';
+    const nxtPill = document.createElement('span');
+    nxtPill.className = 'px-2 py-1 rounded-full text-sm font-semibold text-white';
+    nxtPill.style.background = phaseColor(sample.next_phase);
+    nxtPill.textContent = sample.next_phase;
+    legendEl.appendChild(curPill);
+    legendEl.appendChild(arrowSpan);
+    legendEl.appendChild(nxtPill);
+
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+
+    const resp = await fetch(
+      `/api/phase_planning_context?video_id=${sample.video_id}&anchor_frame=${sample.anchor_frame}&total_frames=${sample.total_frames}`
+    );
+    if (!resp.ok) {
+      row1.innerHTML = '<span class="text-red-400 text-sm col-span-5">Failed to load context</span>';
+      return;
+    }
+    const ctx = await resp.json();
+
+    // prev_frames has up to 10 frames ending at anchor.
+    // Row 1: first 5 (older), Row 2: last 5 (recent → anchor)
+    const prev = ctx.prev_frames;
+    const next = ctx.next_frames;
+    const row1Frames = prev.slice(0, 5);
+    const row2Frames = prev.slice(5);   // up to 5, last one is anchor
+
+    // Pad rows to always show 5 slots
+    const makeEmpty = () => {
+      const div = document.createElement('div');
+      div.className = 'rounded-lg bg-gray-800';
+      div.style.height = '90px';
+      return div;
+    };
+
+    // Fill row 1 (older history)
+    for (let i = 0; i < 5; i++) {
+      if (i < row1Frames.length) {
+        row1.appendChild(_makeFrameThumb(row1Frames[i], sample.anchor_frame, false));
+      } else {
+        row1.appendChild(makeEmpty());
+      }
+    }
+
+    // Fill row 2 (recent history + anchor)
+    for (let i = 0; i < 5; i++) {
+      if (i < row2Frames.length) {
+        const f = row2Frames[i];
+        row2.appendChild(_makeFrameThumb(f, sample.anchor_frame, f.is_anchor));
+      } else {
+        row2.appendChild(makeEmpty());
+      }
+    }
+
+    // Fill row 3 (future)
+    for (let i = 0; i < 5; i++) {
+      if (i < next.length) {
+        row3.appendChild(_makeFrameThumb(next[i], sample.anchor_frame, false));
+      } else {
+        row3.appendChild(makeEmpty());
+      }
+    }
+  }
+
+  function closeFilmstrip() {
+    const modal = document.getElementById('filmstrip-modal');
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
   }
 
   function renderLabel(label) {
@@ -838,7 +2748,7 @@
         seen.forEach(l => {
           const pill = document.createElement('span');
           pill.className = 'label-pill text-white rounded-full px-2 py-0.5 font-medium';
-          pill.style.background = ({"cystic_plate":"#f59e0b","calot_triangle":"#10b981","cystic_artery":"#ef4444","cystic_duct":"#3b82f6","gallbladder":"#8b5cf6","tool":"#ec4899"})[l] || '#aaa';
+          pill.style.background = ({"cystic_plate":"#f59e0b","calot_triangle":"#10b981","cystic_artery":"#ef4444","cystic_duct":"#3b82f6","gallbladder":"#8b5cf6","tool":"#ec4899","grippers":"#00ff88","target_tissue":"#ff6644","wound_gap":"#44aaff","bites":"#ff00ff","needle":"#dd88ff"})[l] || '#aaa';
           pill.textContent = l.replace('_', ' ');
           div.appendChild(pill);
         });
@@ -859,16 +2769,41 @@
         div.appendChild(pill);
       } else {
         for (const l of label.labels) {
-          const pill = document.createElement('span');
-          const color = ACTION_COLOR_MAP[l];
-          if (color) {
-            pill.className = 'label-pill text-white rounded-full px-2 py-0.5 font-medium';
-            pill.style.background = color;
+          if (isTripletLabel(l)) {
+            // Render as 3-part colored chip: [inst] → [verb] → [tgt]
+            const [inst, verb, tgt] = l.split(' → ');
+            const chip = document.createElement('span');
+            chip.className = 'label-pill inline-flex items-center rounded-full overflow-hidden text-xs font-medium border border-gray-200';
+            const parts = [
+              { text: inst, color: TRIPLET_COLORS.inst },
+              { text: verb, color: TRIPLET_COLORS.verb },
+              { text: tgt,  color: TRIPLET_COLORS.tgt  },
+            ];
+            parts.forEach(({ text, color }, i) => {
+              const span = document.createElement('span');
+              span.style.cssText = `background:${color};color:white;padding:1px 6px`;
+              span.textContent = text;
+              chip.appendChild(span);
+              if (i < 2) {
+                const arrow = document.createElement('span');
+                arrow.style.cssText = 'background:#f3f4f6;color:#9ca3af;padding:1px 3px;font-size:10px';
+                arrow.textContent = '→';
+                chip.appendChild(arrow);
+              }
+            });
+            div.appendChild(chip);
           } else {
-            pill.className = 'label-pill bg-green-100 text-green-700 rounded-full px-2 py-0.5 font-medium';
+            const pill = document.createElement('span');
+            const color = ACTION_COLOR_MAP[l];
+            if (color) {
+              pill.className = 'label-pill text-white rounded-full px-2 py-0.5 font-medium';
+              pill.style.background = color;
+            } else {
+              pill.className = 'label-pill bg-green-100 text-green-700 rounded-full px-2 py-0.5 font-medium';
+            }
+            pill.textContent = l;
+            div.appendChild(pill);
           }
-          pill.textContent = l;
-          div.appendChild(pill);
         }
       }
     }
@@ -1248,6 +3183,10 @@
   document.getElementById('refresh-btn').addEventListener('click', () => {
     if (!selectedTask || !selectedDataset) return;
     const taskKey = `${selectedDataset}_${selectedTask}`;
+    if (selectedTask === 'phase_planning') {
+      loadPlanningGT(taskKey, null);
+      return;
+    }
     const entry = dashboardData.find(e => e.task_key === taskKey);
     if (entry && entry.granularity === 'video') {
       // Re-initialize group state on explicit reload
@@ -1263,8 +3202,12 @@
   document.getElementById('video-select').addEventListener('change', e => {
     if (!selectedTask || !selectedDataset) return;
     const taskKey = `${selectedDataset}_${selectedTask}`;
-    loadExtras(taskKey, e.target.value);
-    loadSamples(taskKey, e.target.value);
+    if (selectedTask === 'phase_planning') {
+      loadPlanningGT(taskKey, e.target.value);
+    } else {
+      loadExtras(taskKey, e.target.value);
+      loadSamples(taskKey, e.target.value);
+    }
     pushState();
   });
 
@@ -1327,11 +3270,7 @@
     <button onclick="event.stopPropagation(); navigateLightbox(1)"
       class="absolute right-4 top-1/2 -translate-y-1/2 text-white bg-black/40 hover:bg-black/70 rounded-full w-10 h-10 flex items-center justify-center text-xl transition">&#8594;</button>
     <div class="flex flex-col items-center gap-3" onclick="event.stopPropagation()">
-      <div id="lightbox-inner" class="relative">
-        <img id="lightbox-img" src="" alt=""
-             class="max-w-[90vw] max-h-[85vh] rounded-lg shadow-2xl object-contain block" />
-        <div id="lightbox-boxes" class="absolute inset-0 pointer-events-none"></div>
-      </div>
+      <div id="lightbox-inner" class="relative"></div>
       <!-- Caption + legend row -->
       <div class="flex items-center gap-4 flex-wrap justify-center">
         <span id="lightbox-caption" class="text-white text-sm bg-black/50 rounded-full px-4 py-1.5"></span>
@@ -1346,44 +3285,160 @@
   function openLightbox(src, caption, label, index) {
     lightboxIndex = index ?? -1;
     const lb = document.getElementById('lightbox');
-    const img = document.getElementById('lightbox-img');
-    const boxesDiv = document.getElementById('lightbox-boxes');
+    const inner = document.getElementById('lightbox-inner');
     const legendDiv = document.getElementById('lightbox-legend');
-    img.src = src;
-    document.getElementById('lightbox-caption').textContent = caption;
-    boxesDiv.innerHTML = '';
+
+    inner.innerHTML = '';
     legendDiv.innerHTML = '';
     legendDiv.classList.add('hidden');
     legendDiv.classList.remove('flex');
+    document.getElementById('lightbox-caption').textContent = caption;
     lb.classList.remove('hidden');
     lb.classList.add('flex');
 
-    if (label && label.type === 'bbox' && label.boxes.length > 0) {
-      // Build legend (deduplicated by label)
-      const seen = new Set();
-      label.boxes.forEach(box => {
-        if (seen.has(box.label)) return;
-        seen.add(box.label);
-        const item = document.createElement('span');
-        item.className = 'flex items-center gap-1.5 text-white text-xs';
-        item.innerHTML = `<span style="width:10px;height:10px;border-radius:2px;background:${box.color};display:inline-block;flex-shrink:0"></span>${box.label.replace(/_/g, ' ')}`;
-        legendDiv.appendChild(item);
-      });
-      legendDiv.classList.remove('hidden');
-      legendDiv.classList.add('flex');
+    const sample = (index >= 0 && index < allSamples.length) ? allSamples[index] : null;
+    const isBbox = label?.type === 'bbox';
+    const bboxPreds = sample?.predictions?.filter(p => p.type === 'raw' && (p.data?.parsed_bboxes || p.data?.parsed_bboxes_pct)) ?? [];
 
-      img.onload = () => {
-        label.boxes.forEach(box => {
-          const div = document.createElement('div');
-          div.className = 'absolute pointer-events-none';
-          div.style.cssText = `
-            left:${box.x0_pct}%; top:${box.y0_pct}%;
-            width:${box.x1_pct - box.x0_pct}%; height:${box.y1_pct - box.y0_pct}%;
-            border: 2px solid ${box.color};
-          `;
-          boxesDiv.appendChild(div);
-        });
+    if (isBbox && bboxPreds.length > 0) {
+      // ── Multi-panel GT vs model comparison ──
+      inner.className = 'flex gap-4 overflow-x-auto max-w-[92vw] pb-1';
+
+      // label → color: seed with known dataset colors, then override with GT boxes
+      const colorMap = {
+        "cystic_plate":"#f59e0b","calot_triangle":"#10b981","cystic_artery":"#ef4444",
+        "cystic_duct":"#3b82f6","gallbladder":"#8b5cf6","tool":"#ec4899",
+        "grippers":"#00ff88","target_tissue":"#ff6644","wound_gap":"#44aaff",
+        "bites":"#ff00ff","needle":"#dd88ff",
       };
+      (label.boxes || []).forEach(b => { colorMap[b.label] = b.color; });
+
+      const makePanel = (title, titleColor, drawBoxes) => {
+        const col = document.createElement('div');
+        col.className = 'flex flex-col items-center gap-1 flex-shrink-0';
+
+        const titleEl = document.createElement('span');
+        titleEl.className = 'text-xs font-semibold tracking-wide';
+        titleEl.style.color = titleColor;
+        titleEl.textContent = title;
+        col.appendChild(titleEl);
+
+        const wrap = document.createElement('div');
+        wrap.className = 'relative';
+
+        const img = document.createElement('img');
+        img.src = src;
+        img.className = 'max-h-[65vh] w-auto rounded shadow-lg block';
+        img.alt = title;
+
+        const overlay = document.createElement('div');
+        overlay.className = 'absolute inset-0 pointer-events-none';
+
+        const legendRow = document.createElement('div');
+        legendRow.className = 'flex flex-wrap gap-x-3 gap-y-1 pt-1 justify-center';
+
+        img.onload = () => {
+          const seenColors = drawBoxes(overlay, img.naturalWidth, img.naturalHeight);
+          if (seenColors) {
+            seenColors.forEach(({ lbl, color }) => {
+              const item = document.createElement('span');
+              item.className = 'flex items-center gap-1 text-white text-xs';
+              item.innerHTML = `<span style="width:9px;height:9px;border-radius:2px;background:${color};display:inline-block;flex-shrink:0"></span>${lbl.replace(/_/g, ' ')}`;
+              legendRow.appendChild(item);
+            });
+          }
+        };
+
+        wrap.appendChild(img);
+        wrap.appendChild(overlay);
+        col.appendChild(wrap);
+        col.appendChild(legendRow);
+        return col;
+      };
+
+      const drawBoxDivs = (overlay, boxes) => {
+        const seen = new Map();
+        boxes.forEach(({ label: lbl, color, x0p, y0p, wp, hp }) => {
+          if (wp <= 0 || hp <= 0) return;
+          const div = document.createElement('div');
+          div.style.cssText = `position:absolute;left:${x0p}%;top:${y0p}%;width:${wp}%;height:${hp}%;border:2px solid ${color};box-sizing:border-box;`;
+          overlay.appendChild(div);
+          if (!seen.has(lbl)) seen.set(lbl, color);
+        });
+        return [...seen.entries()].map(([lbl, color]) => ({ lbl, color }));
+      };
+
+      // GT panel — coords already in percentage
+      const gtBoxes = (label.boxes || []).map(b => ({
+        label: b.label, color: b.color,
+        x0p: b.x0_pct, y0p: b.y0_pct,
+        wp: b.x1_pct - b.x0_pct, hp: b.y1_pct - b.y0_pct,
+      }));
+      inner.appendChild(makePanel('GT', '#e5e7eb', (overlay) => drawBoxDivs(overlay, gtBoxes)));
+
+
+      // Model panels — pixel → percentage using img.naturalWidth/Height
+      for (const pred of bboxPreds) {
+        const modelState = selectedModels.find(m => m.model === pred.model && m.split === pred.split);
+        const modelColor = modelState?.color || '#7c3aed';
+        const shortName = pred.model.split('-').slice(0, 3).join('-');
+
+        const isPct = !!pred.data.parsed_bboxes_pct;
+        const bboxData = isPct ? pred.data.parsed_bboxes_pct : pred.data.parsed_bboxes;
+        inner.appendChild(makePanel(shortName, modelColor, (overlay, nw, nh) => {
+          // Support pixel coords (parsed_bboxes) and percentage coords (parsed_bboxes_pct)
+          const predBoxes = Object.entries(bboxData)
+            .filter(([, c]) => Array.isArray(c) && c.length > 0)
+            .flatMap(([lbl, c]) => {
+              const boxes = Array.isArray(c[0]) ? c : [c];
+              return boxes
+                .filter(b => Array.isArray(b) && b.length === 4)
+                .map(([x0, y0, x1, y1]) => ({
+                  label: lbl, color: colorMap[lbl] || modelColor,
+                  x0p: isPct ? x0 : x0/nw*100,
+                  y0p: isPct ? y0 : y0/nh*100,
+                  wp:  isPct ? (x1-x0) : (x1-x0)/nw*100,
+                  hp:  isPct ? (y1-y0) : (y1-y0)/nh*100,
+                }));
+            });
+          return drawBoxDivs(overlay, predBoxes);
+        }));
+      }
+
+      legendDiv.classList.add('hidden');
+
+    } else {
+      // ── Single-image mode (non-bbox or no preds) ──
+      inner.className = 'relative';
+      const img = document.createElement('img');
+      img.src = src;
+      img.className = 'max-w-[90vw] max-h-[85vh] rounded-lg shadow-2xl object-contain block';
+      img.alt = '';
+      const boxesDiv = document.createElement('div');
+      boxesDiv.className = 'absolute inset-0 pointer-events-none';
+      inner.appendChild(img);
+      inner.appendChild(boxesDiv);
+
+      if (isBbox && label.boxes.length > 0) {
+        const seen = new Set();
+        label.boxes.forEach(box => {
+          if (seen.has(box.label)) return;
+          seen.add(box.label);
+          const item = document.createElement('span');
+          item.className = 'flex items-center gap-1.5 text-white text-xs';
+          item.innerHTML = `<span style="width:10px;height:10px;border-radius:2px;background:${box.color};display:inline-block;flex-shrink:0"></span>${box.label.replace(/_/g, ' ')}`;
+          legendDiv.appendChild(item);
+        });
+        legendDiv.classList.remove('hidden');
+        legendDiv.classList.add('flex');
+        img.onload = () => {
+          label.boxes.forEach(box => {
+            const div = document.createElement('div');
+            div.style.cssText = `position:absolute;left:${box.x0_pct}%;top:${box.y0_pct}%;width:${box.x1_pct-box.x0_pct}%;height:${box.y1_pct-box.y0_pct}%;border:2px solid ${box.color};`;
+            boxesDiv.appendChild(div);
+          });
+        };
+      }
     }
   }
 
@@ -1398,11 +3453,12 @@
     const lb = document.getElementById('lightbox');
     lb.classList.add('hidden');
     lb.classList.remove('flex');
-    document.getElementById('lightbox-img').src = '';
+    document.getElementById('lightbox-inner').innerHTML = '';
   }
   document.addEventListener('keydown', e => {
     const lb = document.getElementById('lightbox');
     const vm = document.getElementById('video-modal');
+    const fm = document.getElementById('filmstrip-modal');
     if (!lb.classList.contains('hidden')) {
       if (e.key === 'Escape') closeLightbox();
       else if (e.key === 'ArrowRight') navigateLightbox(1);
@@ -1411,6 +3467,8 @@
       if (e.key === 'Escape') closeVideoModal();
       else if (e.key === 'ArrowRight') navigateVideoModal(1);
       else if (e.key === 'ArrowLeft')  navigateVideoModal(-1);
+    } else if (!fm.classList.contains('hidden')) {
+      if (e.key === 'Escape') closeFilmstrip();
     }
   });
 </script>
@@ -1433,5 +3491,9 @@
           class="text-white text-sm bg-black/50 rounded-full px-4 py-1.5 max-w-2xl text-center"></span>
   </div>
 </div>
+
+<!-- Radar hover tooltip -->
+<div id="radar-tooltip"
+     class="hidden fixed text-xs bg-gray-900 text-white px-2 py-1 rounded shadow-lg pointer-events-none z-50 whitespace-nowrap"></div>
 </body>
 </html>
