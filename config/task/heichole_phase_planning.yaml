@@ -1,0 +1,12 @@
+name: heichole_phase_planning
+data: SurgicalPhasePlanning
+data_config:
+  transform: None
+  data_dir: /home/ubuntu/datasets/vlm/HeiCo
+  vqa_path: /home/ubuntu/datasets/vlm/HeiCo-VQA-Planning/phase_planning.json
+  frame_template: "{data_dir}/extracted_frames/{video_id}/frame_{frame:05d}.png"
+n_context: 16
+stride: 25
+label_names: ['current_phase', 'next_phase']
+clip_eval_mode: 'singlelabel'
+shots: zero

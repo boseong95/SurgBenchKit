@@ -1,0 +1,12 @@
+name: vtrb_suturing_recognition
+data: VTRBSuturingRecognition
+data_config:
+  transform: None
+  data_dir: /home/ubuntu/datasets/vlm/VTRB-Suturing
+  vqa_path: /home/ubuntu/datasets/vlm/VTRB-Suturing-VQA/recognition/recognition.json
+  bbox_path: /home/ubuntu/datasets/vlm/VTRB-Suturing-VQA/bbox_annotations.json
+  frames_dir: /home/ubuntu/datasets/vlm/VTRB-Suturing-VQA/frames
+max_samples: 100
+label_names: ['grippers', 'target_tissue', 'wound_gap', 'bites', 'needle']
+clip_eval_mode: 'singlelabel'
+shots: few

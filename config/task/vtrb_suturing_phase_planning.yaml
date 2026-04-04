@@ -1,0 +1,12 @@
+name: vtrb_suturing_phase_planning
+data: VTRBSuturingPhasePlanning
+data_config:
+  transform: None
+  data_dir: /home/ubuntu/datasets/vlm/VTRB-Suturing-VQA
+  vtrb_root: /home/ubuntu/datasets/vlm/VTRB-Suturing
+  vqa_path: /home/ubuntu/datasets/vlm/VTRB-Suturing-VQA/phase_planning_easy/phase_planning_easy.json
+n_context: 10
+stride: 5
+label_names: ['current_phase', 'next_phase']
+clip_eval_mode: 'singlelabel'
+shots: zero

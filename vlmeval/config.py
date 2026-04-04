@@ -7,6 +7,9 @@ from vlmeval.inference_surg import *
 from vlmeval.dataset import DresdenAnatomyPresence, EndoscapesCVSAssessment, Cholec80PhaseRecognition, Cholec80ToolRecognition, HeiCholeDataloader, MultiBypass140PhaseRecognition, Cholect45Triplet, ErrorRecognition, ErrorDetection, AVOSActionRecognition, JIGSAWSSkillAssessment, CholecT50PhaseRecognition, CholecT50ToolRecognition
 from vlmeval.dataset.endoscapes_object_detection import EndoscapesObjectDetection
 from vlmeval.dataset.cholect50_status import CholecT50StatusReasoning
+from vlmeval.dataset.surgical_phase_planning import SurgicalPhasePlanning, SurgicalPhaseProgress
+from vlmeval.dataset.cholect50_triplet_planning import CholecT50PhaseTripletPlanning
+from vlmeval.dataset.vtrb_suturing_recognition import VTRBSuturingRecognition, VTRBSuturingPhasePredictEasy, VTRBSuturingPhasePlanning
 
 PandaGPT_ROOT = None
 MiniGPT4_ROOT = None
@@ -30,6 +33,16 @@ model_map = {
     "infer_data_video": infer_data_video,
     "infer_data": infer_data,
     "eval_data": eval_data,
+    "infer_data_status": infer_data_status,
+    "eval_data_status": eval_data_status,
+    "infer_data_triplet_planning": infer_data_triplet_planning,
+    "eval_data_triplet_planning": eval_data_triplet_planning,
+    "infer_data_vtrb_recognition": infer_data_vtrb_recognition,
+    "infer_data_mcq": infer_data_mcq,
+    "eval_data_mcq": eval_data_mcq,
+    "infer_data_mcq_multiframe": infer_data_mcq_multiframe,
+    "eval_data_mcq_multiframe": eval_data_mcq_multiframe,
+    "eval_data_vtrb_recognition": eval_data_vtrb_recognition,
 }
 
 data_map = {
@@ -48,6 +61,12 @@ data_map = {
     "CholecT50PhaseRecognition": CholecT50PhaseRecognition,
     "CholecT50ToolRecognition": CholecT50ToolRecognition,
     "CholecT50StatusReasoning": CholecT50StatusReasoning,
+    "CholecT50PhaseTripletPlanning": CholecT50PhaseTripletPlanning,
+    "SurgicalPhasePlanning": SurgicalPhasePlanning,
+    "SurgicalPhaseProgress": SurgicalPhaseProgress,
+    "VTRBSuturingRecognition": VTRBSuturingRecognition,
+    "VTRBSuturingPhasePredictEasy": VTRBSuturingPhasePredictEasy,
+    "VTRBSuturingPhasePlanning": VTRBSuturingPhasePlanning,
 }
 
 

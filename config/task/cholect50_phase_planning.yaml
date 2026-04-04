@@ -1,0 +1,11 @@
+name: cholect50_phase_planning
+data: SurgicalPhasePlanning
+data_config:
+  transform: None
+  data_dir: /home/ubuntu/datasets/vlm/CholecT50/CholecT50
+  vqa_path: /home/ubuntu/datasets/vlm/CholecT50-VQA/phase_planning/phase_planning.json
+n_context: 16
+stride: 1
+label_names: ['current_phase', 'next_phase']
+clip_eval_mode: 'singlelabel'
+shots: zero

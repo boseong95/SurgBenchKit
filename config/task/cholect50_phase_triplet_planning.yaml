@@ -1,0 +1,12 @@
+name: cholect50_phase_triplet_planning
+data: CholecT50PhaseTripletPlanning
+data_config:
+  transform: None
+  data_dir: /home/ubuntu/datasets/vlm/CholecT50/CholecT50
+  vqa_path: /home/ubuntu/datasets/vlm/CholecT50-VQA/phase_triplet_planning/phase_triplet_planning.json
+  q4_path: /home/ubuntu/datasets/vlm/CholecT50-VQA/q4/q4.json
+n_context: 10
+stride: 5
+label_names: ['phase', 'current_triplet', 'next_phase', 'next_triplet']
+clip_eval_mode: 'singlelabel'
+shots: zero

@@ -1,0 +1,9 @@
+name: vtrb_suturing_phase_predict_easy
+data: VTRBSuturingPhasePredictEasy
+data_config:
+  transform: None
+  data_dir: /home/ubuntu/datasets/vlm/VTRB-Suturing-VQA
+  vqa_path: /home/ubuntu/datasets/vlm/VTRB-Suturing-VQA/phase_predict_easy/phase_predict_easy.json
+label_names: ['A', 'B', 'C', 'D', 'E']
+clip_eval_mode: 'singlelabel'
+shots: zero

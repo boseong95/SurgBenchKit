@@ -884,6 +884,170 @@ def get_prompts(path, task, model):
         The future movement will be made to ensure proper field-of-view for the surgeon. If no movement is needed, then output Static. \
         Instructions: assess the video carefully, and respond with the future laparoscope movement. Only output one of the given motions, and do not explain why.'
 
+        # ── CholecT50 Phase Planning ──────────────────────────────────
+
+        _phase_list = (
+            'The procedure follows these phases in order:\n'
+            '  [1] Preparation\n'
+            '  [2] Calot Triangle Dissection\n'
+            '  [3] Clipping & Cutting\n'
+            '  [4] Gallbladder Dissection\n'
+            '  [5] Gallbladder Packaging\n'
+            '  [6] Cleaning & Coagulation\n'
+            '  [7] Gallbladder Retraction'
+        )
+
+        _phase_landmarks = (
+            '  [1] Preparation:\n'
+            '      Early: Trocar insertion, initial camera positioning.\n'
+            '      Middle: Grasper positioning on gallbladder fundus, initial retraction.\n'
+            '      Late: Good retraction established, gallbladder lifted, field exposed.\n'
+            '  [2] Calot Triangle Dissection:\n'
+            '      Early: Initial dissection near gallbladder neck, hook approaching Calot\'s triangle.\n'
+            '      Middle: Clearing fat/tissue from Calot\'s triangle, cystic duct partially exposed.\n'
+            '      Late: Cystic duct and artery fully exposed, Critical View of Safety achieved.\n'
+            '  [3] Clipping & Cutting:\n'
+            '      Early: Clipper introduced, approaching cystic duct.\n'
+            '      Middle: Cystic duct clipped, moving to clip cystic artery.\n'
+            '      Late: Both structures clipped and divided.\n'
+            '  [4] Gallbladder Dissection:\n'
+            '      Early: Hook dissecting gallbladder from liver bed at the neck.\n'
+            '      Middle: Gallbladder partially detached, progressing along liver bed.\n'
+            '      Late: Nearly fully detached, thin attachments remaining.\n'
+            '  [5] Gallbladder Packaging:\n'
+            '      Early: Specimen bag being introduced.\n'
+            '      Middle: Gallbladder being maneuvered toward bag opening.\n'
+            '      Late: Gallbladder placed in bag, being closed.\n'
+            '  [6] Cleaning & Coagulation:\n'
+            '      Early: Irrigator washing liver bed, inspecting for bleeding.\n'
+            '      Middle: Active coagulation with bipolar, irrigation/aspiration.\n'
+            '      Late: Liver bed dry, minimal bleeding.\n'
+            '  [7] Gallbladder Retraction:\n'
+            '      Early: Specimen bag being pulled toward trocar site.\n'
+            '      Middle: Extraction through port.\n'
+            '      Late: Gallbladder fully extracted, instruments removed.'
+        )
+
+        _transition_rule = (
+            'For next_phase:\n'
+            '  - If the phase appears to be ongoing (not near completion), next_phase = current_phase.\n'
+            '  - If the phase appears to be finishing or transitioning, next_phase = the following phase.'
+        )
+
+        # No CoT — direct prediction
+        _phase_planning_prompt = (
+            'You are monitoring a laparoscopic cholecystectomy.\n'
+            + _phase_list + '\n\n'
+            'You are shown consecutive frames from the procedure.\n'
+            'Identify the current phase, and predict the next phase.\n\n'
+            + _transition_rule + '\n\n'
+            'Respond in JSON: {{"current_phase": "...", "next_phase": "..."}}'
+        )
+
+        # With CoT — landmarks + structured reasoning
+        _phase_planning_cot_prompt = (
+            'You are monitoring a laparoscopic cholecystectomy.\n'
+            'The procedure follows these phases in order, with typical visual landmarks:\n\n'
+            + _phase_landmarks + '\n\n'
+            'You are shown consecutive frames from the procedure.\n'
+            'First identify which phase and stage you see, then predict what comes next.\n\n'
+            + _transition_rule + '\n\n'
+            'Respond in JSON with ALL fields:\n'
+            '{{\n'
+            '  "instruments": ["list visible instruments"],\n'
+            '  "actions": ["describe what each instrument is doing"],\n'
+            '  "current_phase": "...",\n'
+            '  "stage": "early or middle or late",\n'
+            '  "next_phase": "..."\n'
+            '}}'
+        )
+
+        # Progress prediction prompt
+        _phase_progress_prompt = (
+            'You are monitoring a laparoscopic cholecystectomy.\n'
+            + _phase_list + '\n\n'
+            'You are shown consecutive frames from the procedure.\n'
+            'Identify the current surgical phase, then estimate how far along that phase is.\n\n'
+            'Respond in JSON: {{"current_phase": "...", "progress": "early or middle or late"}}\n\n'
+            'early = phase just started (0-33%%), middle = phase underway (33-67%%), late = phase nearly done (67-100%%)'
+        )
+
+        _all_models = ['GeminiPro1-5', 'Qwen2-VL-7B-Instruct', 'InternVL3-8B', 'MedGemma-4B',
+                        'Qwen3-VL-8B-Instruct', 'Qwen3-VL-8B-Thinking', 'llava_next_vicuna_7b']
+
+        # Register for all datasets x all models
+        _planning_tasks = ['cholect50_phase_planning', 'cholec80_phase_planning', 'heichole_phase_planning']
+        _progress_tasks = ['cholect50_phase_progress_prediction', 'cholec80_phase_progress_prediction', 'heichole_phase_progress_prediction']
+
+        for _model in _all_models:
+            for _task in _planning_tasks:
+                PROMPTS[(_task, _model)] = _phase_planning_prompt
+            for _task in _progress_tasks:
+                PROMPTS[(_task, _model)] = _phase_progress_prompt
+
+        # ── VTRB Suturing Phase Predict Easy ─────────────────────────────────
+        # Template: {choices} is filled per-sample in inference
+        _vtrb_phase_easy_prompt = (
+            'You are observing a robotic suturing procedure.\n'
+            'The image shows a step from the suturing task.\n\n'
+            'Which of the following phases is being performed?\n'
+            '{choices}\n\n'
+            'Respond with ONLY the letter (A, B, C, D, or E).'
+        )
+
+        _vtrb_phase_planning_prompt = (
+            'You are observing a robotic suturing procedure.\n'
+            'You are shown consecutive frames from the procedure.\n\n'
+            'The possible phases are:\n'
+            '{choices}\n\n'
+            'Identify the current phase, then predict the next phase.\n'
+            'If the current phase is still ongoing, next_phase should be the same as current_phase.\n'
+            'If the phase is finishing, next_phase should be the following phase.\n\n'
+            'Respond in JSON: {{"current_phase": "A or B or C or D or E", "next_phase": "A or B or C or D or E"}}'
+        )
+
+        for _model in _all_models:
+            PROMPTS[('vtrb_suturing_phase_predict_easy', _model)] = _vtrb_phase_easy_prompt
+            PROMPTS[('vtrb_suturing_phase_planning', _model)] = _vtrb_phase_planning_prompt
+
+        # ── Phase + Triplet Planning ──────────────────────────────────────────
+        _triplet_planning_prompt = (
+            'You are a surgical assistant monitoring a laparoscopic cholecystectomy.\n'
+            + _phase_list + '\n\n'
+            'VOCABULARY:\n'
+            '  Instruments: grasper, bipolar, hook, scissors, clipper, irrigator\n'
+            '  Verbs: grasp, retract, dissect, coagulate, clip, cut, aspirate, irrigate, pack\n'
+            '  Targets: gallbladder, cystic_plate, cystic_duct, cystic_artery, cystic_pedicle,\n'
+            '           blood_vessel, fluid, abdominal_wall_cavity, liver, adhesion, omentum,\n'
+            '           peritoneum, gut, specimen_bag\n\n'
+            'You are shown consecutive frames from the procedure.\n'
+            'Identify what is happening and predict what comes next.\n\n'
+            + _transition_rule + '\n\n'
+            'Respond in JSON:\n'
+            '{{\n'
+            '  "phase": "...",\n'
+            '  "current_triplet": [{{"instrument": "...", "verb": "...", "target": "..."}}],\n'
+            '  "next_phase": "...",\n'
+            '  "next_triplet": [{{"instrument": "...", "verb": "...", "target": "..."}}]\n'
+            '}}'
+        )
+
+        for _model in ['GeminiPro1-5', 'Qwen2-VL-7B-Instruct', 'InternVL3-8B', 'MedGemma-4B',
+                        'Qwen3-VL-8B-Instruct', 'Qwen3-VL-8B-Thinking', 'llava_next_vicuna_7b']:
+            PROMPTS[('cholect50_phase_triplet_planning', _model)] = _triplet_planning_prompt
+
+        # ── VTRB-Suturing Recognition (few-shot bbox) ────────────────────
+        _vtrb_recognition_prompt = (
+            'Now detect all objects in this NEW image. '
+            'Use the same classes and bbox format as the examples above.\n\n'
+            'Respond in JSON:\n'
+            '{{"objects": [{{"class": "...", "bbox": [x1, y1, x2, y2], "description": "..."}}]}}'
+        )
+        for _model in ['GeminiPro1-5', 'Qwen2-VL-7B-Instruct', 'InternVL3-8B', 'MedGemma-4B',
+                        'Qwen3-VL-8B-Instruct', 'Qwen3-VL-8B-Thinking', 'llava_next_vicuna_7b',
+                        'paligemma-3b-mix-448']:
+            PROMPTS[('vtrb_suturing_recognition', _model)] = _vtrb_recognition_prompt
+
         # Copy Phi-3.5-Vision prompt to other models for video tasks
         for tuple in list(PROMPTS):
                 try:

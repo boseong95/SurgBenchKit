@@ -38,10 +38,20 @@ def main(cfg: DictConfig):
 
     if cfg.model.contrastive:
         cfg.eval_mode = f'{cfg.eval_mode}_contrastive'
+    elif 'phase_predict_easy' in cfg.task.name:
+        cfg.eval_mode = f'{cfg.eval_mode}_mcq'
+    elif 'vtrb_suturing_phase_planning' in cfg.task.name:
+        cfg.eval_mode = f'{cfg.eval_mode}_mcq_multiframe'
+    elif 'vtrb_suturing_recognition' in cfg.task.name:
+        cfg.eval_mode = f'{cfg.eval_mode}_vtrb_recognition'
+    elif 'phase_triplet_planning' in cfg.task.name:
+        cfg.eval_mode = f'{cfg.eval_mode}_triplet_planning'
+    elif 'phase_planning' in cfg.task.name or 'phase_progress_prediction' in cfg.task.name:
+        cfg.eval_mode = f'{cfg.eval_mode}_status'
     elif (  # video tasks
         'error_recognition' in cfg.task.name or \
         'error_detection' in cfg.task.name or \
-        'skill_assessment' in cfg.task.name 
+        'skill_assessment' in cfg.task.name
     ):
         cfg.eval_mode = f'{cfg.eval_mode}_video'
 
